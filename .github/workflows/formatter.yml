@@ -25,7 +25,7 @@ jobs:
           fi
       - name: Go vet
         run: go vet ./...
-      - uses: astral-sh/ruff-action@v4
+      - uses: astral-sh/ruff-action@v4.1.0
         with:
           version: '0.16.6'
           args: check --config ruff.toml container
