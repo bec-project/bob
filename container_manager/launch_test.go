@@ -139,10 +139,18 @@ func TestDockerRejectsUnsupportedIdentityMappings(t *testing.T) {
 
 func TestHomeOwnershipIncludesExistingStateWithoutFollowingSymlinks(t *testing.T) {
 	options := resolvedOptions{Options: DefaultOptions(), launchID: "owned"}
+	options.Runtime = "docker"
 	args := strings.Join(getHomeOwnershipArgs(options, "1234:5678"), " ")
 	for _, want := range []string{"create", "--label " + launchLabel + "=owned-home", "-R -h 1234:5678 /home/opencode"} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("missing home ownership policy %q: %s", want, args)
 		}
+	}
+	launchArgs, _, err := getLaunchArgs(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(launchArgs, " "), "--mount type=volume,src="+options.HomeVolume+",dst=/home/opencode,volume-nocopy") {
+		t.Fatalf("Docker launch can overwrite prepared empty-home ownership: %v", launchArgs)
 	}
 }

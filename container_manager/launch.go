@@ -48,7 +48,12 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 		"--security-opt", "no-new-privileges:true",
 		"--tmpfs", "/tmp:mode=1777",
 		"--workdir", options.workdir,
-		"--volume", options.HomeVolume + ":/home/opencode",
+	}
+	if options.Runtime == "docker" {
+		// An empty prepared volume must not inherit the image's UID again.
+		args = append(args, "--mount", "type=volume,src="+options.HomeVolume+",dst=/home/opencode,volume-nocopy")
+	} else {
+		args = append(args, "--volume", options.HomeVolume+":/home/opencode")
 	}
 	args = append(args, seccompArgs(options.Runtime)...)
 
