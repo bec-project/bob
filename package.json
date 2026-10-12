@@ -1,9 +1,17 @@
 {
   "name": "bob-release-tools",
   "private": true,
+  "scripts": {
+    "test": "node --test ci/release.test.mjs"
+  },
   "devDependencies": {
     "semantic-release": "^25.0.0",
     "@semantic-release/exec": "^7.0.0",
     "conventional-changelog-conventionalcommits": "^10.4.1"
+  },
+  "overrides": {
+    "semantic-release": {
+      "conventional-changelog-writer": "^9.3.0"
+    }
   }
 }
