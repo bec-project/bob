@@ -38,6 +38,18 @@ jobs:
         run: |
           echo 'release_made=false' >> "$GITHUB_OUTPUT"
           npx --no-install semantic-release
+      - name: Publish Go binaries to Gitea
+        if: steps.release.outputs.release_made == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
+        run: |
+          for package in dist/*.tar.gz dist/SHA256SUMS; do
+            curl --fail-with-body \
+              --user "$GITEA_REGISTRY_TOKEN" \
+              --upload-file "$package" \
+              "https://gitea.psi.ch/api/packages/bec/generic/bob/${RELEASE_VERSION}/$(basename "$package")"
+          done
 
   container:
     needs: release
