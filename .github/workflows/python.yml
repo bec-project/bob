@@ -1,0 +1,38 @@
+name: Firewall unit tests
+
+on:
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Test firewall bootstrap
+        run: |
+          python -m pip install coverage
+          python -m coverage run --branch --source=network -m unittest discover -s container -p network_test.py -v
+          python -m coverage report
+          python -m coverage xml -o coverage.xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          disable_search: true
+          flags: python
+          name: python-${{ matrix.python }}
+          fail_ci_if_error: true

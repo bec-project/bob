@@ -1,0 +1,40 @@
+name: Formatting and static checks
+
+on: [workflow_call]
+
+permissions:
+  contents: read
+
+jobs:
+  formatter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Check Go formatting
+        shell: bash
+        run: |
+          mapfile -t files < <(git ls-files '*.go')
+          unformatted=$(gofmt -l "${files[@]}")
+          if [[ -n "$unformatted" ]]; then
+            printf 'Go files need gofmt:\n%s\n' "$unformatted"
+            exit 1
+          fi
+      - name: Go vet
+        run: go vet ./...
+      - uses: astral-sh/ruff-action@v4
+        with:
+          version: '0.16.6'
+          args: check --config ruff.toml container
+      - name: Check Python formatting
+        run: ruff format --check --diff --config ruff.toml container
+      - name: Validate workflows
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          actionlint
+      - name: Check scripts
+        run: |
+          shellcheck ci/build_binaries.sh container/entrypoint.sh

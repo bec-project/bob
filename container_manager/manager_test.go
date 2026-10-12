@@ -52,8 +52,11 @@ func TestContainerIntegration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(reference, "notes.txt"), []byte("synthetic reference"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(workspace, 0777); err != nil {
-		t.Fatal(err)
+	// The reference must be writable by Unix permissions so only :ro denies writes.
+	for _, directory := range []string{workspace, reference} {
+		if err := os.Chmod(directory, 0777); err != nil {
+			t.Fatal(err)
+		}
 	}
 	volume := fmt.Sprintf("bob-test-%d-%d", os.Getpid(), time.Now().UnixNano())
 	t.Cleanup(func() {
@@ -107,7 +110,8 @@ for line in sys.stdin:
 		t.Fatalf("workspace path changed: %q", connection.Workspace)
 	}
 	check := `test "$PWD" = "$1" || exit 1; touch "$1/probe" || exit 1; rm "$1/probe" || exit 1; cat "$2/notes.txt" || exit 1; if touch "$2/probe" 2>/tmp/error; then exit 1; fi; grep -q 'Read-only file system' /tmp/error`
-	if output, err := exec.CommandContext(ctx, binary, "exec", connection.Container, "sh", "-c", check, "mount-check", workspace, reference).CombinedOutput(); err != nil {
+	agentShell := `exec setpriv --reuid="$BOB_UID" --regid="$BOB_GID" --clear-groups --bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs sh -c "$@"`
+	if output, err := exec.CommandContext(ctx, binary, "exec", connection.Container, "sh", "-c", agentShell, "agent-check", check, "mount-check", workspace, reference).CombinedOutput(); err != nil {
 		t.Fatalf("mount isolation failed: %s", output)
 	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", connection.URL+"/config", nil)
@@ -294,7 +298,7 @@ for path in ("/var/run/docker.sock", "/run/podman/podman.sock"):
 		t.Fatal("did not use the dedicated working directory")
 	}
 	check = `test "$PWD" = "$1" || exit 1; for directory in "$1" "$2"; do touch "$directory/probe" || exit 1; rm "$directory/probe" || exit 1; done; if touch "$3/probe" 2>/tmp/error; then exit 1; fi; grep -q 'Read-only file system' /tmp/error`
-	if output, err := exec.CommandContext(ctx, binary, "exec", connection.Container, "sh", "-c", check, "mount-check", workspace, second, reference).CombinedOutput(); err != nil {
+	if output, err := exec.CommandContext(ctx, binary, "exec", connection.Container, "sh", "-c", agentShell, "agent-check", check, "mount-check", workspace, second, reference).CombinedOutput(); err != nil {
 		t.Fatalf("mixed mount permissions failed: %s", output)
 	}
 

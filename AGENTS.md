@@ -48,6 +48,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `container/` — image build context, Python firewall bootstrap, shell entrypoint, and network tests
 - `bob.example.toml` — annotated public configuration example
 - `build/` — ignored local build output
+- `.github/workflows/` — reusable CI checks and CI-gated release workflows
+- `ci/` — release binary packaging
 
 Treat `go.mod` as the source of truth for Go dependencies and the minimum Go version.
 Treat `ruff.toml` as the source of truth for Python linting and formatting settings.
@@ -74,6 +76,8 @@ If you change:
   validation. Check bootstrap identity, capability dropping, provider configuration, and MCP setup.
 - Documentation only: verify paths, commands, examples, and stated runtime limitations. A broad
   test run is unnecessary when executable behavior is unchanged.
+- CI or release tooling: run actionlint and the affected checks. Keep publishing in the trusted
+  release workflow.
 
 ## Lifecycle And Isolation
 
