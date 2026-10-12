@@ -17,7 +17,7 @@ jobs:
     outputs:
       branch-pr: ${{ steps.pr.outputs.result }}
     steps:
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v9
         id: pr
         if: github.event_name == 'push' && github.ref != 'refs/heads/main'
         with:
