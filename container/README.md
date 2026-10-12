@@ -1,51 +1,35 @@
 # OpenCode container
 
-This directory is the Docker/Podman image build context. Build from the repository root:
+Build from the repository root, then launch with the
+[container manager](../container_manager/README.md):
 
 ```sh
 docker build -t localhost/bob ./container
 ```
 
-Use the [container manager](../container_manager/README.md) to launch it with validated
-mounts, identity mapping, endpoint allowlisting, and dynamic published ports.
+Rebuild after changes to the Dockerfile, entrypoint, firewall, or OpenCode configuration.
+The image includes Node.js and Python for local MCP servers; add other dependencies at
+build time because outbound downloads are restricted.
 
-The entrypoint starts as container root, runs `network.py` to resolve configured
-endpoints and install IPv4/IPv6 outbound firewall rules, then uses `setpriv` to switch
-to the selected UID/GID, remove all capabilities, and enable no-new-privileges. OpenCode
-becomes PID 1. Any bootstrap failure stops startup.
-Bootstrap requires active seccomp filtering (`Seccomp: 2`); an unconfined container
-exits before network setup or agent execution. Rebuild the image to include this check.
+## Bootstrap
 
-The launcher supplies these environment variables:
+The entrypoint starts as root, verifies active seccomp filtering, and installs IPv4/IPv6
+firewall rules through `network.py`. It then switches to the selected UID/GID, removes
+all capabilities, and enables no-new-privileges. OpenCode becomes PID 1. Any bootstrap
+failure prevents agent execution. See the manager's [network policy](../container_manager/README.md#network-policy).
 
-| Variable | Purpose |
-| --- | --- |
-| `BOB_EGRESS_URLS` | JSON list of HTTP(S) model-provider and remote MCP URLs |
-| `BOB_UID`, `BOB_GID` | Agent filesystem identity; default 1000:1000 |
-| `BOB_GROUPS` | Supplementary group IDs, or `keep-groups` for rootless Podman |
-| `LLM_BASE_URL` | Required OpenAI-compatible HTTP(S) provider API URL |
-| `LLM_MODEL_ID` | Provider model ID; default `Qwen3.8-27B` |
-| `API_KEY` | Provider token, directly available to the agent |
-| `OPENCODE_SERVER_PASSWORD` | Separate OpenCode HTTP Basic authentication password |
-| `OPENCODE_CONFIG_CONTENT` | Optional local or remote MCP configuration |
+The manager supplies provider settings (`LLM_BASE_URL`, `LLM_MODEL_ID`, `API_KEY`), the
+endpoint allowlist (`BOB_EGRESS_URLS`), filesystem identity (`BOB_UID`, `BOB_GID`,
+`BOB_GROUPS`), the generated `OPENCODE_SERVER_PASSWORD`, and optional MCP configuration
+(`OPENCODE_CONFIG_CONTENT`). Prefer the manager for validated mounts and runtime settings.
 
-Direct engine launches must start as root with NET_ADMIN, SETUID, SETGID, and SETPCAP
-capabilities and provide `BOB_EGRESS_URLS`. Dropping all other capabilities, providing
-writable `/tmp`, and setting no-new-privileges are part of the manager's launch
-configuration. Missing firewall privileges or endpoint configuration prevent the image
-from starting OpenCode.
-Direct launches also require the engine's seccomp profile. With current Docker use
-`--security-opt seccomp=builtin`; with Podman use `--seccomp-policy default` and keep
-seccomp enabled in the engine configuration.
+The server listens on `0.0.0.0:4096` with HTTP Basic authentication as `opencode`.
+`/home/opencode` holds persistent configuration and sessions. Provider/MCP addresses must
+be reachable from inside the container: `localhost` refers to the container. Docker
+launches map `host.docker.internal` to the host gateway; Podman provides
+`host.containers.internal` where its network configuration supports it.
 
-The server listens on `0.0.0.0:4096`. Clients use HTTP Basic authentication with
-username `opencode`. The writable `/home/opencode` volume stores configuration and
-sessions. Additional mounts preserve host paths. Model and remote MCP servers must use
-container-reachable addresses; `localhost` refers to the container. With Docker, the
-manager maps `host.docker.internal` to the host gateway. Podman provides
-`host.containers.internal` when supported by its network configuration.
-
-Explicit arguments are forwarded to OpenCode after firewall setup. `EXPOSE` is metadata:
-it does not publish ports or start MCP servers. Build arguments `SERVER_PORT` and
-`MCP_PORT` customize that metadata. `SERVER_PORT` also sets the entrypoint's default
-server port; the Go manager explicitly uses port 4096.
+Explicit entrypoint arguments are forwarded to OpenCode after bootstrap. Build arguments
+`SERVER_PORT` and `MCP_PORT` set exposed-port metadata; they do not publish ports or start
+MCP servers. `SERVER_PORT` also changes the entrypoint's default port, but the manager
+uses 4096.
