@@ -32,6 +32,7 @@ type Options struct {
 	MCPCommand  []string
 	MCPURL      string
 	BindAddress string
+	MountLabel  string
 }
 
 // DefaultOptions returns the launcher's configuration defaults.
@@ -47,6 +48,9 @@ func DefaultOptions() Options {
 }
 
 func (input Options) validate() error {
+	if input.MountLabel != "" && input.MountLabel != "shared" && input.MountLabel != "private" {
+		return errors.New("workspace.mount_label must be shared or private, or omitted for pre-labeled mounts")
+	}
 	if _, err := getEndpoint(input.BaseURL); err != nil {
 		return err
 	}
@@ -106,6 +110,7 @@ type resolvedOptions struct {
 	mounts     []mount
 	userConfig userSettings
 	password   string
+	launchID   string
 }
 
 func getResolvedOptions(input Options) (resolvedOptions, error) {
@@ -134,6 +139,10 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 		return resolvedOptions{}, err
 	}
 	options.password = hex.EncodeToString(token[:])
+	if _, err := rand.Read(token[:]); err != nil {
+		return resolvedOptions{}, err
+	}
+	options.launchID = hex.EncodeToString(token[:])
 	if options.Name == "" {
 		options.Name = fmt.Sprintf("bob-%d-%s", os.Getuid(), options.password[:8])
 	}
@@ -163,15 +172,27 @@ func getDirectory(path string) (string, error) {
 	if strings.ContainsAny(path, ",:\n") {
 		return "", errors.New("mount paths cannot contain commas, colons, or newlines")
 	}
-	if pathsOverlap(path, "/home/opencode") {
-		return "", errors.New("bind mounts must not overlap the container home volume")
-	}
-	for _, protected := range []string{"/usr", "/etc", "/bin", "/sbin", "/lib", "/proc", "/sys", "/dev", "/run"} {
-		if pathsOverlap(path, protected) {
-			return "", errors.New("bind mounts must not overlap container system directories")
-		}
+	if err := validateMountDestination(path); err != nil {
+		return "", err
 	}
 	return path, nil
+}
+
+func validateMountDestination(path string) error {
+	if path == "/tmp" {
+		return errors.New("/tmp is reserved for the container's temporary filesystem")
+	}
+	if pathsOverlap(path, "/home/opencode") {
+		return errors.New("bind mounts must not overlap the container home volume")
+	}
+	// Include destination aliases in the bundled Alpine image. Resolving host
+	// symlinks alone cannot detect aliases in the container's filesystem.
+	for _, protected := range []string{"/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/sys", "/dev", "/run", "/var/run", "/var/lock"} {
+		if pathsOverlap(path, protected) {
+			return errors.New("bind mounts must not overlap container system directories")
+		}
+	}
+	return nil
 }
 
 func getMounts(input Options) ([]mount, error) {

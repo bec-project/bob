@@ -13,6 +13,8 @@ The entrypoint starts as container root, runs `network.py` to resolve configured
 endpoints and install IPv4/IPv6 outbound firewall rules, then uses `setpriv` to switch
 to the selected UID/GID, remove all capabilities, and enable no-new-privileges. OpenCode
 becomes PID 1. Any bootstrap failure stops startup.
+Bootstrap requires active seccomp filtering (`Seccomp: 2`); an unconfined container
+exits before network setup or agent execution. Rebuild the image to include this check.
 
 The launcher supplies these environment variables:
 
@@ -32,6 +34,9 @@ capabilities and provide `BOB_EGRESS_URLS`. Dropping all other capabilities, pro
 writable `/tmp`, and setting no-new-privileges are part of the manager's launch
 configuration. Missing firewall privileges or endpoint configuration prevent the image
 from starting OpenCode.
+Direct launches also require the engine's seccomp profile. With current Docker use
+`--security-opt seccomp=builtin`; with Podman use `--seccomp-policy default` and keep
+seccomp enabled in the engine configuration.
 
 The server listens on `0.0.0.0:4096`. Clients use HTTP Basic authentication with
 username `opencode`. The writable `/home/opencode` volume stores configuration and

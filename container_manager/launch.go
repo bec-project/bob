@@ -1,7 +1,6 @@
 package containermanager
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,6 +16,17 @@ type userSettings struct {
 	Groups     []string
 }
 
+const launchLabel = "io.bob.launch"
+
+func seccompArgs(engine string) []string {
+	if engine == "docker" {
+		// Override daemon defaults, including seccomp=unconfined.
+		return []string{"--security-opt", "seccomp=builtin"}
+	}
+	// Ignore image-provided policies; bootstrap also verifies an active filter.
+	return []string{"--seccomp-policy", "default"}
+}
+
 // getLaunchArgs contains the complete Docker/Podman container creation command.
 // Environment values are prepared separately so the flags stay together.
 func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
@@ -26,7 +36,9 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 	}
 	args := []string{
 		"create",
+		"--pull", "never",
 		"--name", options.Name,
+		"--label", launchLabel + "=" + options.launchID,
 		"--user", "0:0",
 		"--cap-drop", "ALL",
 		"--cap-add", "NET_ADMIN",
@@ -38,6 +50,7 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 		"--workdir", options.workdir,
 		"--volume", options.HomeVolume + ":/home/opencode",
 	}
+	args = append(args, seccompArgs(options.Runtime)...)
 
 	// Runtime-specific identity and host access.
 	if options.Runtime == "docker" {
@@ -53,8 +66,18 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 	// Workspace mounts and published ports.
 	for _, mount := range options.mounts {
 		value := mount.path + ":" + mount.path
+		var flags []string
 		if mount.readOnly {
-			value += ":ro"
+			flags = append(flags, "ro")
+		}
+		switch options.MountLabel {
+		case "shared":
+			flags = append(flags, "z")
+		case "private":
+			flags = append(flags, "Z")
+		}
+		if len(flags) > 0 {
+			value += ":" + strings.Join(flags, ",")
 		}
 		args = append(args, "--volume", value)
 	}
@@ -82,13 +105,17 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 
 // The temporary ownership container uses the same home volume as the agent.
 func getHomeOwnershipArgs(options resolvedOptions, identity string) []string {
-	return []string{
-		"run", "--rm",
+	args := []string{
+		"create", "--pull", "never", "--name", "bob-home-" + options.launchID,
+		"--label", launchLabel + "=" + options.launchID + "-home",
+	}
+	args = append(args, seccompArgs(options.Runtime)...)
+	return append(args,
 		"--user", "0",
 		"--entrypoint", "chown",
-		"--volume", options.HomeVolume + ":/home/opencode",
-		options.Image, identity, "/home/opencode",
-	}
+		"--volume", options.HomeVolume+":/home/opencode",
+		options.Image, "-R", "-h", identity, "/home/opencode",
+	)
 }
 
 func getLaunchEnvironment(options resolvedOptions) ([]string, error) {
@@ -130,8 +157,8 @@ func getLaunchEnvironment(options resolvedOptions) ([]string, error) {
 	return environment, nil
 }
 
-// prepareUser maps host ownership and prepares the persistent home volume.
-func prepareUser(ctx context.Context, options resolvedOptions) (userSettings, error) {
+// getUserSettings maps the caller's filesystem identity into the container.
+func getUserSettings(options resolvedOptions) (userSettings, error) {
 	if options.Runtime == "podman" {
 		settings := userSettings{UserNSMode: "keep-id:uid=1000,gid=1000"}
 		if runtime.GOOS == "linux" {
@@ -148,13 +175,24 @@ func prepareUser(ctx context.Context, options resolvedOptions) (userSettings, er
 	if err != nil {
 		return userSettings{}, err
 	}
-	_, err = command(ctx, options.binary, nil, getHomeOwnershipArgs(options, identity)...)
-	if err != nil {
-		return userSettings{}, err
-	}
 	var groupsToAdd []string
 	for _, group := range groups {
 		groupsToAdd = append(groupsToAdd, strconv.Itoa(group))
 	}
 	return userSettings{User: identity, Groups: groupsToAdd}, nil
+}
+
+// Docker host IDs only retain their meaning without daemon user-namespace mapping.
+func validateDockerMapping(info string) error {
+	var securityOptions []string
+	if err := json.Unmarshal([]byte(info), &securityOptions); err != nil {
+		return fmt.Errorf("read Docker security options: %w", err)
+	}
+	for _, option := range securityOptions {
+		name := strings.SplitN(option, ",", 2)[0]
+		if name == "name=rootless" || name == "name=userns" {
+			return fmt.Errorf("Docker rootless and userns-remap modes are unsupported; use rootless Podman with keep-id or Docker without user-namespace remapping")
+		}
+	}
+	return nil
 }

@@ -78,3 +78,71 @@ func TestLaunchPreservesIdentityEndpointsAndArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestLaunchEnforcesEngineSeccompPolicy(t *testing.T) {
+	for _, engine := range []string{"docker", "podman"} {
+		t.Run(engine, func(t *testing.T) {
+			input := DefaultOptions()
+			input.Runtime = engine
+			options := resolvedOptions{Options: input}
+			args, _, err := getLaunchArgs(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "--security-opt seccomp=builtin"
+			if engine == "podman" {
+				want = "--seccomp-policy default"
+			}
+			for _, command := range [][]string{args, getHomeOwnershipArgs(options, "1000:1000")} {
+				if !strings.Contains(strings.Join(command, " "), want) {
+					t.Fatalf("missing explicit seccomp policy: %v", command)
+				}
+			}
+		})
+	}
+}
+
+func TestMountLabelPolicyPreservesReadOnlyFlags(t *testing.T) {
+	for _, policy := range []string{"", "shared", "private"} {
+		t.Run(policy, func(t *testing.T) {
+			input := DefaultOptions()
+			input.MountLabel = policy
+			options := resolvedOptions{Options: input, mounts: []mount{{path: "/workspace"}, {path: "/references", readOnly: true}}}
+			args, _, err := getLaunchArgs(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			label := map[string]string{"": "", "shared": "z", "private": "Z"}[policy]
+			writable, readOnly := "/workspace:/workspace", "/references:/references:ro"
+			if label != "" {
+				writable += ":" + label
+				readOnly += "," + label
+			}
+			command := strings.Join(args, " ")
+			if !strings.Contains(command, "--volume "+writable+" ") || !strings.Contains(command, "--volume "+readOnly+" ") {
+				t.Fatalf("incorrect mount policy: %v", args)
+			}
+		})
+	}
+}
+
+func TestDockerRejectsUnsupportedIdentityMappings(t *testing.T) {
+	for _, info := range []string{`["name=rootless"]`, `["name=userns"]`, `["name=rootless,version=1"]`, "invalid"} {
+		if err := validateDockerMapping(info); err == nil {
+			t.Fatalf("accepted unsupported Docker mapping: %s", info)
+		}
+	}
+	if err := validateDockerMapping(`["name=seccomp,profile=builtin","name=apparmor"]`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomeOwnershipIncludesExistingStateWithoutFollowingSymlinks(t *testing.T) {
+	options := resolvedOptions{Options: DefaultOptions(), launchID: "owned"}
+	args := strings.Join(getHomeOwnershipArgs(options, "1234:5678"), " ")
+	for _, want := range []string{"create", "--label " + launchLabel + "=owned-home", "-R -h 1234:5678 /home/opencode"} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("missing home ownership policy %q: %s", want, args)
+		}
+	}
+}

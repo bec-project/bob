@@ -50,9 +50,12 @@ func testCtrlC(t *testing.T, failCleanup bool) {
 	// Model runtime subprocesses and a cleanup operation long enough to interrupt.
 	script := `#!/bin/sh
 case "$1" in
-    create) echo synthetic-container-id; exit 0 ;;
-    start) touch "$BOB_SIGNAL_STATE/up"; sleep 30; exit 0 ;;
-    rm) trap 'touch "$BOB_SIGNAL_STATE/interrupted"; exit 130' INT; touch "$BOB_SIGNAL_STATE/down"; sleep 0.5; if [ "$BOB_SIGNAL_FAIL_CLEANUP" = 1 ]; then echo "synthetic cleanup failure" >&2; exit 1; fi; touch "$BOB_SIGNAL_STATE/cleaned"; exit 0 ;;
+    info) echo '[]'; exit 0 ;;
+    create) case "$*" in *"--entrypoint chown"*) echo synthetic-home-id; exit 0 ;; esac; touch "$BOB_SIGNAL_STATE/created"; echo synthetic-container-id; exit 0 ;;
+    start) if [ "$2" = --attach ]; then exit 0; fi; touch "$BOB_SIGNAL_STATE/up"; sleep 30; exit 0 ;;
+    inspect) echo 0; exit 0 ;;
+    ps) if [ -e "$BOB_SIGNAL_STATE/created" ]; then echo synthetic-container-id; fi; exit 0 ;;
+    rm) if [ "$3" = synthetic-home-id ]; then exit 0; fi; trap 'touch "$BOB_SIGNAL_STATE/interrupted"; exit 130' INT; touch "$BOB_SIGNAL_STATE/down"; sleep 0.5; if [ "$BOB_SIGNAL_FAIL_CLEANUP" = 1 ]; then echo "synthetic cleanup failure" >&2; exit 1; fi; rm "$BOB_SIGNAL_STATE/created"; touch "$BOB_SIGNAL_STATE/cleaned"; exit 0 ;;
 esac
 exit 0
 `

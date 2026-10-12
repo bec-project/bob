@@ -18,6 +18,21 @@ func TestValidateMCPCommand(t *testing.T) {
 	}
 }
 
+func TestMountLabelValidation(t *testing.T) {
+	input := DefaultOptions()
+	input.BaseURL = "https://provider.example/"
+	for _, policy := range []string{"", "shared", "private"} {
+		input.MountLabel = policy
+		if err := input.validate(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	input.MountLabel = "invalid"
+	if err := input.validate(); err == nil {
+		t.Fatal("accepted invalid mount labeling policy")
+	}
+}
+
 func TestMCPPort(t *testing.T) {
 	for _, port := range []int{0, 1024, 19000, 65535} {
 		input := DefaultOptions()
@@ -130,5 +145,21 @@ func TestMountsProtectContainerHome(t *testing.T) {
 	}
 	if pathsOverlap("/home/other", "/home/opencode") {
 		t.Fatal("rejected an unrelated home directory")
+	}
+}
+
+func TestMountDestinationsProtectTemporaryFilesystemAndImageAliases(t *testing.T) {
+	for _, path := range []string{"/tmp", "/var", "/var/run", "/var/run/docker", "/var/lock", "/var/lock/agent", "/lib64", "/lib64/agent"} {
+		if err := validateMountDestination(path); err == nil {
+			t.Errorf("accepted protected destination %s", path)
+		}
+	}
+	for _, path := range []string{"/tmp/workspace", "/var/tmp/workspace", "/workspace", "/var/runtime"} {
+		if err := validateMountDestination(path); err != nil {
+			t.Errorf("rejected unrelated destination %s: %v", path, err)
+		}
+	}
+	if _, err := getMounts(Options{Workdir: "/tmp"}); err == nil {
+		t.Fatal("accepted a workspace conflicting with the mandatory tmpfs")
 	}
 }

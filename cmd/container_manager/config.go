@@ -23,9 +23,10 @@ type config struct {
 		BindAddress string `toml:"bind_address"`
 	} `toml:"container"`
 	Workspace struct {
-		Workdir string   `toml:"workdir"`
-		RW      []string `toml:"rw"`
-		RO      []string `toml:"ro"`
+		Workdir    string   `toml:"workdir"`
+		RW         []string `toml:"rw"`
+		RO         []string `toml:"ro"`
+		MountLabel string   `toml:"mount_label"`
 	} `toml:"workspace"`
 	Provider struct {
 		BaseURL string  `toml:"base_url"`
@@ -67,6 +68,7 @@ func loadConfig(path string) (containermanager.Options, error) {
 		Workdir:     settings.Workspace.Workdir,
 		ReadWrite:   settings.Workspace.RW,
 		ReadOnly:    settings.Workspace.RO,
+		MountLabel:  settings.Workspace.MountLabel,
 		BaseURL:     settings.Provider.BaseURL,
 		Model:       settings.Provider.Model,
 		MCPPort:     settings.MCP.Port,

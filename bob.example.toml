@@ -26,6 +26,11 @@ rw = []
 # Additional read-only directories. Default: [].
 # Example: ro = ["../notes", "/absolute/path/to/data"].
 ro = []
+# On SELinux hosts, explicitly opt into labeling workspace mounts:
+# mount_label = "shared"   # :z, allows multiple containers to use the directories.
+# mount_label = "private"  # :Z, grants access to this container only.
+# Omit for pre-labeled mounts. Relabeling changes host files; do not use it for
+# system directories or a whole home directory used by other confined services.
 # Relative paths resolve beside this file; "." means this config's directory.
 # Host and container mount paths are identical. Read-only directories must not
 # overlap workdir or any RW directory, including through symlinks.

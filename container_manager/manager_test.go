@@ -196,9 +196,54 @@ for line in status.splitlines():
     if line.startswith(("CapInh:", "CapPrm:", "CapEff:", "CapBnd:", "CapAmb:")):
         assert int(line.split()[1], 16) == 0, line
 assert "NoNewPrivs:\t1" in status
+assert "Seccomp:\t2" in status
 `
 	if output, err := exec.CommandContext(ctx, binary, "exec", connection.Container, "python3", "-c", check).CombinedOutput(); err != nil {
 		t.Fatalf("agent retained bootstrap privileges: %s", output)
+	}
+	// Engine exec defaults to the bootstrap identity and can receive engine
+	// capabilities. Explicitly recreate the agent's dropped privileges before
+	// probing its ability to change the firewall or regain root.
+	check = `import ctypes, errno, os, subprocess
+status = open("/proc/self/status").read()
+for line in status.splitlines():
+    if line.startswith(("CapInh:", "CapPrm:", "CapEff:", "CapBnd:", "CapAmb:")):
+        assert int(line.split()[1], 16) == 0, line
+assert "NoNewPrivs:\t1" in status
+assert "Seccomp:\t2" in status
+libc = ctypes.CDLL(None, use_errno=True)
+# With zero flags this does not change namespaces or require capabilities.
+# The default seccomp profile still denies it, proving syscall filtering.
+assert libc.unshare(0) == -1 and ctypes.get_errno() == errno.EPERM
+for tool in ("iptables", "ip6tables"):
+    result = subprocess.run([tool, "-P", "OUTPUT", "ACCEPT"], capture_output=True)
+    assert result.returncode != 0, "agent changed firewall"
+result = subprocess.run(["setpriv", "--inh-caps=+net_admin", "true"], capture_output=True)
+assert result.returncode != 0, "agent regained NET_ADMIN"
+if os.getuid() != 0:
+    try:
+        os.setuid(0)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("agent regained root")
+    try:
+        fd = os.open("/usr/local/lib/bob/network.py", os.O_WRONLY)
+    except PermissionError:
+        pass
+    else:
+        os.close(fd)
+        raise AssertionError("agent can rewrite privileged bootstrap")
+for path in ("/var/run/docker.sock", "/run/podman/podman.sock"):
+    assert not os.path.exists(path), "host-control socket exposed: " + path
+`
+	dropPrivileges := `exec setpriv --reuid="$BOB_UID" --regid="$BOB_GID" --clear-groups --bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs python3 -c "$1"`
+	if output, err := exec.CommandContext(ctx, binary, "exec", connection.Container, "sh", "-c", dropPrivileges, "agent-check", check).CombinedOutput(); err != nil {
+		t.Fatalf("agent containment failed: %s", output)
+	}
+	output, err = exec.CommandContext(ctx, binary, "run", "--rm", "--network", "none", "--security-opt", "seccomp=unconfined", "--env", "BOB_EGRESS_URLS=[]", DefaultOptions().Image, "--version").CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "seccomp filtering is required") {
+		t.Fatalf("image did not reject unconfined startup: %s, %v", output, err)
 	}
 	for _, tool := range []string{"iptables", "ip6tables"} {
 		output, err := exec.CommandContext(ctx, binary, "exec", connection.Container, tool, "-S", "OUTPUT").CombinedOutput()

@@ -20,6 +20,20 @@ discovers published endpoints, and waits for readiness. Stop force-removes the c
 while preserving the home volume. Ctrl-C cancels startup or shuts down a running
 container; further interrupts do not interrupt cleanup. Cleanup errors produce a nonzero
 exit status. An existing container with a conflicting name is never removed.
+Each launch carries a random ownership label, allowing cleanup to find its container
+even when creation was accepted but a cancelled engine command did not return its ID.
+Cleanup waits up to 30 seconds for a container from a failed create to appear, including
+transport and process failures. Failures before dispatch and recognized Docker validation
+rejections are settled; cleanup still checks for any owned container left behind. Unknown
+daemon responses, including proxy and server timeouts, remain uncertain.
+Configured names are checked for conflicts before creation. The image must already be
+available in the selected engine: build or pull it before launching. Creation never pulls.
+If creation remains unresolved, it reports an error and retains ownership for a later
+`Stop` retry; another `Start` is blocked until cleanup succeeds. An empty lookup alone
+does not settle an interrupted create. If removal reports an error, cleanup independently
+checks whether the owned container is gone before clearing its state.
+Linux Docker home-ownership preparation uses a separately labeled helper container with
+the same cleanup tracking. It checks the helper's exit status before starting the agent.
 
 ## Configuration
 
@@ -41,6 +55,7 @@ OpenCode from starting if they fail.
 | `workspace.workdir` | Required working directory, mounted writable |
 | `workspace.rw` | Additional writable directories; default `[]` |
 | `workspace.ro` | Additional read-only directories; default `[]` |
+| `workspace.mount_label` | Optional SELinux relabeling: `shared` (`:z`) or `private` (`:Z`); omitted for pre-labeled mounts |
 | `provider.base_url` | Required OpenAI-compatible HTTP(S) API URL; no default |
 | `provider.model` | Model ID; default `Qwen3.8-27B` |
 | `provider.token` | Overrides `API_KEY`; an explicit empty string clears it |
@@ -51,6 +66,14 @@ OpenCode from starting if they fail.
 Relative directory paths resolve beside the TOML file. Mounts retain their absolute host
 paths inside the agent. RO mounts cannot overlap writable mounts, including through
 symlinks. Mounts cannot hide the image's system directories or home volume.
+The `/tmp` destination is reserved for the container's tmpfs; subdirectories such as
+`/tmp/workspace` remain usable. The bundled image's system-directory aliases, including
+`/var/run`, `/var/lock`, and their parents, are also protected. Custom images must preserve
+these filesystem assumptions.
+On enforcing SELinux hosts, use pre-labeled directories or explicitly set `mount_label`.
+Relabeling changes host files, including read-only mount sources; do not select it for
+system directories or a whole home directory used by other confined services. Private
+labels are unsuitable for directories shared with other containers.
 
 The bundled OpenCode configuration enables one self-hosted provider through
 `@ai-sdk/openai-compatible`. The provider must implement that API protocol.
@@ -65,6 +88,17 @@ URL, and key. Docker uses the caller's UID/GID and supplementary groups when the
 launcher runs on Linux; on other host platforms it uses UID/GID 1000. Podman uses
 `keep-id` and Linux `keep-groups` (requires `crun`). Bootstrap runs as container root;
 OpenCode runs with the selected filesystem identity and no capabilities.
+Docker rootless and daemon `userns-remap` modes are rejected because host IDs do not map
+directly to container IDs; use rootless Podman with `keep-id` for that setup. Docker home
+preparation updates existing state recursively without following symlinks. Do not share
+one home volume concurrently between launches using different UID/GID identities.
+
+The launcher explicitly selects Docker's built-in seccomp profile
+(`--security-opt seccomp=builtin`) or Podman's default policy
+(`--seccomp-policy default`). The same policy applies to home-ownership preparation.
+The image verifies active filtering before network setup and refuses unconfined startup.
+Use a current Docker client/engine supporting `seccomp=builtin`; older clients may
+interpret `builtin` as a filename. Rebuild the image after updating its bootstrap code.
 
 ## Network policy
 
@@ -108,3 +142,25 @@ uses authenticated HTTP; use a trusted network or HTTPS ingress.
 Docker is integration-tested. Podman and Linux filesystem identity mapping need
 verification on their deployment hosts. Firewall setup requires NET_ADMIN inside the
 container's own network namespace; unsupported runtimes fail closed.
+
+## Isolation limits
+
+The agent loses all bootstrap capabilities and runs with no-new-privileges. This prevents
+it from changing the firewall or regaining privileges through setuid executables. It
+does not make arbitrary host mounts safe or establish resistance to kernel/runtime bugs.
+Use a maintained, patched container engine/runtime and enable its seccomp policy.
+For example, runc versions through 1.1.11 are affected by the container escape
+[CVE-2024-21626](https://github.com/opencontainers/runc/security/advisories/GHSA-xr7r-f8xq-vfvv);
+the fix for that issue starts at 1.1.12. This is not a substitute for keeping the runtime
+current against later vulnerabilities.
+
+Keep the launcher, its configuration, and other host-executed code outside the agent's
+writable workspace. The agent can modify files in writable mounts, including scripts or
+Git hooks that the host may later execute. Do not expose Docker/Podman sockets or other
+host-control sockets, even through read-only mounts: socket requests are not read-only
+filesystem writes. Linux supplementary groups are inherited, so a mounted socket may
+be accessible through the caller's groups. Avoid launching as host root.
+
+Configured provider/MCP endpoints and replies to incoming TCP connections remain usable
+communication channels. Unix sockets are outside the IP firewall. No CPU, memory, or PID
+limits are configured, so resource exhaustion is also outside the current policy.

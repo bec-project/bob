@@ -210,3 +210,14 @@ url = "http://mcp.example:8000/mcp"
 		t.Fatal("remote MCP or API binding lost")
 	}
 }
+
+func TestMountLabelConfig(t *testing.T) {
+	path := writeConfig(t, "[workspace]\nworkdir = \"/repo\"\nmount_label = \"shared\"\n[provider]\nbase_url = \"https://provider.example.net/\"\n")
+	input, err := loadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.MountLabel != "shared" {
+		t.Fatal("mount labeling policy was not loaded")
+	}
+}
