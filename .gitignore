@@ -1,7 +1,12 @@
 /build/
+/dist/
+/node_modules/
 .DS_Store
 *.log
 
 /bob.toml
 
 __pycache__/
+/.coverage
+/coverage.out
+/coverage.xml

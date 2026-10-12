@@ -1,0 +1,25 @@
+name: Docker integration tests
+
+on: [workflow_call]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # The launch policy needs a current engine supporting seccomp=builtin.
+      - uses: docker/setup-docker-action@v5
+      - name: Build agent image
+        run: docker build --tag localhost/bob ./container
+      - name: Exercise real Docker lifecycle and isolation
+        env:
+          BOB_CONTAINER_TEST: '1'
+        run: go test -race -count=1 -timeout=10m -v ./container_manager -run '^TestContainer'

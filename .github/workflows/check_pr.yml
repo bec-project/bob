@@ -1,0 +1,35 @@
+name: Check PR status for branch
+
+on:
+  workflow_call:
+    outputs:
+      branch-pr:
+        description: Open PR number when branch-push CI duplicates a PR run
+        value: ${{ jobs.pr.outputs.branch-pr }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    outputs:
+      branch-pr: ${{ steps.pr.outputs.result }}
+    steps:
+      - uses: actions/github-script@v8
+        id: pr
+        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+        with:
+          result-encoding: string
+          script: |
+            const prs = await github.paginate(github.rest.pulls.list, {
+              ...context.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${context.ref.replace('refs/heads/', '')}`,
+            });
+            if (prs.length) {
+              core.notice(`Skipping duplicate branch-push CI; PR #${prs[0].number} runs it.`);
+              return String(prs[0].number);
+            }
+            return '';

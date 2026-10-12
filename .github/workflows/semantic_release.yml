@@ -1,0 +1,52 @@
+name: Continuous Delivery
+
+on:
+  workflow_call:
+    secrets:
+      GITEA_REGISTRY_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_made: ${{ steps.release.outputs.release_made }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked release tooling
+        run: npm ci --ignore-scripts
+      - name: Semantic release and publish binary archives
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo 'release_made=false' >> "$GITHUB_OUTPUT"
+          npx --no-install semantic-release
+
+  container:
+    needs: release
+    if: needs.release.outputs.release_made == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/container_build.yml
+    secrets:
+      GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
+    with:
+      ref: ${{ github.sha }}
+      version: ${{ needs.release.outputs.version }}
