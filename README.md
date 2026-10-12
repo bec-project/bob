@@ -51,8 +51,7 @@ Binaries and SHA256 checksums are attached to GitHub releases and published to G
 generic package registry under `bec/bob/<version>`. The multi-platform agent image is published as
 `gitea.psi.ch/bec/bob:<version>` and `gitea.psi.ch/bec/bob:latest`. Node is needed only for
 release tooling; dependencies are locked in `package-lock.json`. Semantic-release uses a
-scoped writer v9 override for the Conventional Commits v10 preset; `npm test` exercises
-release analysis and note rendering. GitHub releases use the
+scoped writer v9 override for the Conventional Commits v10 preset. GitHub releases use the
 built-in `GITHUB_TOKEN`. Container publishing requires the repository or organization secret
 `GITEA_REGISTRY_TOKEN` in `username:token` format, with permission to publish packages under
 the Gitea `bec` organization, matching the BEC and BEC log ingestor workflows.

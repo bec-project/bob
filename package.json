@@ -1,9 +1,6 @@
 {
   "name": "bob-release-tools",
   "private": true,
-  "scripts": {
-    "test": "node --test ci/release.test.mjs"
-  },
   "devDependencies": {
     "semantic-release": "^25.0.0",
     "@semantic-release/exec": "^7.0.0",
