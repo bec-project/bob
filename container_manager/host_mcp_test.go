@@ -67,6 +67,67 @@ func TestHostMCPGroupExitedRequiresNoLiveMembers(t *testing.T) {
 	}
 }
 
+func TestHostMCPCleanupRetriesFailedInspection(t *testing.T) {
+	cmd := exec.Command("sh", "-c", "exit 0")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	close(done)
+	manager := &Manager{hostMCPs: []*hostMCPProcess{{
+		name: "bec_mcp", cmd: cmd, done: done, groupErr: syscall.EPERM,
+	}}}
+	// Model an inspection failure after the process was reaped, then another
+	// failed inspection during cleanup. Neither should settle ownership.
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := manager.Stop(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("lost inspection cancellation: %v", err)
+	}
+	if len(manager.hostMCPs) != 1 {
+		t.Fatal("failed inspection discarded process ownership")
+	}
+	if err := manager.Stop(context.Background()); err != nil {
+		t.Fatalf("cleanup retry retained stale inspection error: %v", err)
+	}
+	if len(manager.hostMCPs) != 0 {
+		t.Fatal("successful inspection retained process ownership")
+	}
+	if err := manager.Stop(context.Background()); err != nil {
+		t.Fatal("completed cleanup was not idempotent")
+	}
+}
+
+func TestHostMCPCleanupRetryDoesNotSignalLiveGroup(t *testing.T) {
+	server, address := hostMCPFixture(t)
+	owner := &Manager{}
+	t.Cleanup(func() { _ = owner.Stop(context.Background()) })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := owner.startHostMCPs(ctx, map[string]MCPServer{"bec_mcp": server}); err != nil {
+		t.Fatal(err)
+	}
+	// A completed process with a failed group cleanup may now refer to a live
+	// reused group. Borrow this test-owned server's ID to verify observation only.
+	done := make(chan struct{})
+	close(done)
+	manager := &Manager{hostMCPs: []*hostMCPProcess{{
+		name: "completed", cmd: owner.hostMCPs[0].cmd, done: done, groupErr: syscall.EPERM,
+	}}}
+	if err := manager.Stop(context.Background()); !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("live group was incorrectly settled: %v", err)
+	}
+	if len(manager.hostMCPs) != 1 {
+		t.Fatal("unresolved group discarded ownership")
+	}
+	connection, err := net.DialTimeout("tcp", address, time.Second)
+	if err != nil {
+		t.Fatal("cleanup retry signalled the live process group")
+	}
+	connection.Close()
+}
+
 func TestHostMCPFixtureDoesNotResolveHostnames(t *testing.T) {
 	server, address := hostMCPFixture(t)
 	server.HostCommand[3] = "import socket\ndef reject_dns(*args):\n raise RuntimeError('fixture must not resolve hostnames')\nsocket.getfqdn = reject_dns\n" + server.HostCommand[3]
