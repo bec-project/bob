@@ -15,8 +15,8 @@ jobs:
     permissions:
       contents: write
     outputs:
-      release_made: ${{ steps.release.outputs.release_made }}
-      version: ${{ steps.release.outputs.version }}
+      release_available: ${{ steps.delivery.outputs.release_available }}
+      version: ${{ steps.delivery.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,29 +31,24 @@ jobs:
           package-manager-cache: false
       - name: Install locked release tooling
         run: npm ci --ignore-scripts
+      - name: Recover interrupted GitHub publication for this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash ci/recover_release.sh
       - name: Semantic release and publish binary archives
-        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo 'release_made=false' >> "$GITHUB_OUTPUT"
-          npx --no-install semantic-release
-      - name: Publish Go binaries to Gitea
-        if: steps.release.outputs.release_made == 'true'
+        run: npx --no-install semantic-release
+      - name: Deliver release binaries to Gitea (including retries)
+        id: delivery
         env:
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
-        run: |
-          for package in dist/*.tar.gz dist/SHA256SUMS; do
-            curl --fail-with-body \
-              --user "$GITEA_REGISTRY_TOKEN" \
-              --upload-file "$package" \
-              "https://gitea.psi.ch/api/packages/bec/generic/bob/${RELEASE_VERSION}/$(basename "$package")"
-          done
+        run: bash ci/publish_release.sh
 
   container:
     needs: release
-    if: needs.release.outputs.release_made == 'true'
+    if: needs.release.outputs.release_available == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/container_build.yml

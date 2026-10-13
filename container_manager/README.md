@@ -98,3 +98,21 @@ BOB_CONTAINER_TEST=1 go test -race ./...
 
 Rebuild the image after bootstrap changes. See [CI workflows](../.github/workflows) for
 checks and release publishing.
+
+## Release delivery
+
+Main-branch releases run only after CI passes. Semantic release creates the version tag
+and GitHub binary assets; delivery downloads those original assets, verifies their
+checksums, and uploads them to Gitea before publishing the matching container image.
+If delivery fails, rerun the failed workflow jobs. An existing release tag on the same
+CI-tested commit is reused; identical files already in Gitea are accepted, while
+conflicting files fail delivery. No new release commit or version is needed for a retry.
+
+The checksum manifest must cover every expected binary archive exactly once. Image
+publication is serialized; retries may publish an older version's image, but only the
+newest published stable GitHub release is promoted to the registry's `latest` tag.
+
+A retry also recovers interrupted GitHub publication for an existing tag on the tested
+commit. Missing releases are recreated as drafts; incomplete drafts keep their release
+notes and receive a freshly rebuilt, verified asset set before publication. Published
+GitHub releases are left untouched, and delivery continues using their original assets.
