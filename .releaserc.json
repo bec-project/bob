@@ -19,8 +19,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "bash ci/build_binaries.sh ${nextRelease.version}",
-        "successCmd": "printf 'release_made=true\\nversion=${nextRelease.version}\\n' >> \"$GITHUB_OUTPUT\""
+        "prepareCmd": "bash ci/build_binaries.sh ${nextRelease.version}"
       }
     ],
     [

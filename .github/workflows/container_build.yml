@@ -19,6 +19,10 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Serialize version publication and latest promotion, including retries of old runs.
+    concurrency:
+      group: bob-image-publication
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -39,8 +43,12 @@ jobs:
           push: true
           tags: |
             gitea.psi.ch/bec/bob:${{ inputs.version }}
-            gitea.psi.ch/bec/bob:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ inputs.ref }}
             org.opencontainers.image.version=${{ inputs.version }}
+      - name: Promote the newest stable release to latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: bash ci/promote_image.sh "$RELEASE_VERSION"
