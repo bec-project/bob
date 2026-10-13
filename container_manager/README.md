@@ -22,10 +22,39 @@ The CLI reads `bob.toml`, or `--config PATH`. See
   such as `/tmp/workspace` are allowed. Custom images must preserve these filesystem assumptions.
 - **Provider:** `provider.base_url` must be a container-reachable OpenAI-compatible API.
   `provider.token` overrides `API_KEY`; an explicit empty token clears it.
-- **MCP:** choose `mcp.url` for remote HTTP(S), or `mcp.command` for a stdio server running
-  inside the container in the workspace, without shell parsing. Install dependencies in
-  the image beforehand. Remote OAuth is disabled. Neither mode needs a published port;
-  `mcp.port` only publishes an incoming server port on host loopback and does not start a server.
+- **MCP:** use named tables such as `[mcp.bec_mcp]`; their keys become OpenCode server
+  names. Set `mcp.<name>.url` to an HTTP(S) MCP endpoint outside the container.
+  In-container stdio MCP commands are unsupported; TOML `command` entries are rejected.
+  Remote OAuth is disabled. HTTP(S) connections do not need a
+  published port. Optional `mcp.<name>.port` publishes that server's container TCP port
+  on host loopback; it does not start a server. Ports must be unique across servers and
+  within 1024–65535, excluding OpenCode's port 4096. A port-only entry just publishes a
+  port and does not add an OpenCode MCP connection.
+  To launch a host HTTP MCP server automatically, set `host_command` (an argument array)
+  alongside `url`. This foreground process runs on the host, outside
+  the agent container. Bob waits for its TCP endpoint and stops only the process group
+  it created when stopping or on startup failure. An already occupied endpoint is
+  rejected. Use `host.docker.internal` or `host.containers.internal` in the container URL;
+  bob probes the corresponding host loopback port. Commands inherit bob's launch
+  directory, which cannot overlap writable agent mounts, including symlink aliases.
+  The executable is also checked, including PATH lookup and symlink aliases. Keep its
+  scripts, imported code, and dependencies outside all agent-writable directories.
+  On native Linux, the server must listen on a container-reachable interface as well
+  as loopback (for bob's readiness probe); a loopback-only listener is insufficient.
+  For example, `--host 0.0.0.0` supports both, but exposes the MCP port on every host
+  interface, so configure server authentication or restrict inbound access. Docker
+  Desktop forwards its host gateway to loopback services.
+  Shutdown waits at most 30 seconds for host processes and retains unresolved
+  ownership for a cleanup retry.
+  Host command output goes to launcher stderr; connection JSON remains on stdout.
+  The container allowlist still contains only the provider and MCP endpoint; it does
+  not gain direct Redis access or mounts of the host MCP code. Host servers need their
+  own dependencies installed on the host.
+  Multiple named servers may be configured together. Move old flat `[mcp]` settings
+  into `[mcp.bob]` (or another name); flat settings and per-server `command` entries are rejected.
+  Connection JSON now returns `mcpPorts`, a map of server names to published host
+  addresses, replacing the former single `mcpPort` field. It is omitted when no MCP
+  ports are published.
 - **Access:** `container.web = true` enables the browser UI; the default is headless `serve`.
   Both use a generated host port and password. The default bind address is `0.0.0.0`;
   use `127.0.0.1` for host-only access. Remote access needs the host's reachable address

@@ -33,10 +33,12 @@ type config struct {
 		Model   string  `toml:"model"`
 		Token   *string `toml:"token"`
 	} `toml:"provider"`
-	MCP struct {
-		Port    int      `toml:"port"`
-		Command []string `toml:"command"`
-		URL     string   `toml:"url"`
+	MCP map[string]struct {
+		Port        int      `toml:"port"`
+		URL         string   `toml:"url"`
+		HostCommand []string `toml:"host_command"`
+		// Decode only to explain the removed setting; never forward or execute it.
+		UnsupportedCommand any `toml:"command"`
 	} `toml:"mcp"`
 }
 
@@ -71,11 +73,20 @@ func loadConfig(path string) (containermanager.Options, error) {
 		MountLabel:  settings.Workspace.MountLabel,
 		BaseURL:     settings.Provider.BaseURL,
 		Model:       settings.Provider.Model,
-		MCPPort:     settings.MCP.Port,
-		MCPCommand:  settings.MCP.Command,
-		MCPURL:      settings.MCP.URL,
 		BindAddress: settings.Container.BindAddress,
 		APIKey:      os.Getenv("API_KEY"),
+	}
+	if len(settings.MCP) > 0 {
+		input.MCPServers = make(map[string]containermanager.MCPServer, len(settings.MCP))
+		for name, server := range settings.MCP {
+			if server.UnsupportedCommand != nil {
+				return input, fmt.Errorf("mcp.%s.command is unsupported; use url with host_command for host startup", name)
+			}
+			input.MCPServers[name] = containermanager.MCPServer{
+				Port: server.Port, URL: server.URL,
+				HostCommand: server.HostCommand,
+			}
+		}
 	}
 	if settings.Provider.Token != nil {
 		input.APIKey = *settings.Provider.Token

@@ -46,15 +46,26 @@ model = "Qwen3.8-27B"
 # Optional provider/gateway token. Overrides API_KEY, including an explicit empty token.
 # token = "your-user-token"
 
-[mcp]
-# Optional remote HTTP MCP endpoint. Its server IPs and TCP port are added to the outbound allowlist.
-# Choose either url or command. Remote connections do not need published ports.
+# Name each MCP through its table key; add more tables for additional servers.
+# The name is used unchanged in OpenCode's mcp configuration.
+# [mcp.bec_mcp]
+# Optional remote HTTP MCP endpoint. Its server IPs and TCP port join the outbound allowlist.
+# HTTP(S) MCP connections do not need published container ports.
 # url = "http://mcp.example:8000/mcp"
-# Optional stdio MCP launch command: executable followed by arguments, without a shell.
-# Runs inside the container in workspace.workdir; OpenCode manages its lifecycle.
-# The executable must be installed in the image or available through a mount.
-# command = ["python3", "/absolute/path/to/mcp_server.py"]
-# Optional single container port for an incoming MCP server. Omit or use 0 to disable.
-# Use a port from 1024 to 65535, excluding OpenCode's reserved port 4096.
-# A host port is allocated automatically on loopback. This does not start an MCP server.
+# Optional container TCP port for this server, published on host loopback.
+# Omit or use 0 to disable. Use 1024 to 65535, excluding OpenCode's port 4096.
+# Each server's published container port must be unique; a host port is allocated automatically.
+# This does not start a server; HTTP(S) connections do not require port publishing.
 # port = 19000
+
+# To let bob start a host HTTP MCP server, keep url and add host_command below.
+# host_command executes OUTSIDE the container, without shell parsing.
+# It must stay in the foreground. Bob waits for its TCP port and stops its process group on exit.
+# The URL must use host.docker.internal (Docker) or host.containers.internal (Podman).
+# The command inherits bob's launch directory; use an installed server executable.
+# Native Linux requires a container-reachable listener as well as loopback for readiness.
+# For example, --host 0.0.0.0 listens on both; authenticate or restrict inbound host access.
+# Docker Desktop can forward to a loopback-only host listener.
+# host_command = ["/path/to/bec-mcp-server", "--transport", "streamable-http", "--port", "19000", "--allow-unauthenticated", "--allowed-hosts", "host.docker.internal:19000"]
+# Host MCP dependencies and service access belong on the host, not in the agent image.
+# This does not publish a container port or give the agent direct access to Redis.

@@ -18,6 +18,7 @@ type Manager struct {
 	launchID        string
 	createUncertain bool
 	home            *Manager
+	hostMCPs        []*hostMCPProcess
 }
 
 type Connection struct {
@@ -27,11 +28,12 @@ type Connection struct {
 	ReadOnly  bool   `json:"readOnly"`
 	Runtime   string `json:"runtime"`
 	Workspace string `json:"workspace"`
-	MCPPort   string `json:"mcpPort"`
+	// MCPPorts maps MCP server names to their published host addresses.
+	MCPPorts map[string]string `json:"mcpPorts,omitempty"`
 }
 
 func (m *Manager) Start(parent context.Context, input Options) (connection Connection, startErr error) {
-	if m.name != "" || m.launchID != "" || m.home != nil {
+	if m.name != "" || m.launchID != "" || m.home != nil || len(m.hostMCPs) > 0 {
 		return connection, errors.New("stop the current assistant before starting another")
 	}
 	options, err := getResolvedOptions(input)
@@ -85,6 +87,9 @@ func (m *Manager) Start(parent context.Context, input Options) (connection Conne
 			}
 		}
 	}()
+	if err := m.startHostMCPs(ctx, options.MCPServers); err != nil {
+		return connection, err
+	}
 	if options.Runtime == "docker" && runtime.GOOS == "linux" {
 		if err := m.prepareHome(ctx, options); err != nil {
 			return connection, err
@@ -111,6 +116,9 @@ func (m *Manager) Start(parent context.Context, input Options) (connection Conne
 			logs = strings.ReplaceAll(logs, options.APIKey, "[redacted]")
 		}
 		return connection, fmt.Errorf("%w\ncontainer logs: %s", err, logs)
+	}
+	if err := m.hostMCPError(); err != nil {
+		return connection, err
 	}
 	return connection, nil
 }
@@ -161,7 +169,8 @@ func (m *Manager) prepareHome(ctx context.Context, options resolvedOptions) erro
 	return nil
 }
 
-func (m *Manager) Stop(parent context.Context) error {
+func (m *Manager) Stop(parent context.Context) (stopErr error) {
+	defer func() { stopErr = errors.Join(stopErr, m.stopHostMCPs(parent)) }()
 	if m.home != nil {
 		if err := m.home.Stop(parent); err != nil {
 			return fmt.Errorf("home ownership cleanup: %w", err)
@@ -236,12 +245,19 @@ func getConnection(ctx context.Context, options resolvedOptions) (Connection, er
 		Runtime:   options.Runtime,
 		Workspace: options.workdir,
 	}
-	if options.MCPPort != 0 {
-		address, err := command(ctx, options.binary, nil, "port", options.Name, fmt.Sprintf("%d/tcp", options.MCPPort))
+	for _, name := range mcpServerNames(options.MCPServers) {
+		port := options.MCPServers[name].Port
+		if port == 0 {
+			continue
+		}
+		address, err := command(ctx, options.binary, nil, "port", options.Name, fmt.Sprintf("%d/tcp", port))
 		if err != nil {
 			return connection, err
 		}
-		connection.MCPPort = strings.Split(address, "\n")[0]
+		if connection.MCPPorts == nil {
+			connection.MCPPorts = map[string]string{}
+		}
+		connection.MCPPorts[name] = strings.Split(address, "\n")[0]
 	}
 	return connection, nil
 }

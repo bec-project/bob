@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -15,6 +16,15 @@ import (
 )
 
 var resourceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
+
+// MCPServer configures an HTTP(S) MCP endpoint, optionally launched on the host.
+type MCPServer struct {
+	// Port optionally publishes a container TCP port on host loopback.
+	Port int
+	URL  string
+	// HostCommand starts a foreground HTTP MCP server outside the container.
+	HostCommand []string
+}
 
 type Options struct {
 	Web         bool
@@ -28,11 +38,10 @@ type Options struct {
 	BaseURL     string
 	Model       string
 	APIKey      string
-	MCPPort     int
-	MCPCommand  []string
-	MCPURL      string
 	BindAddress string
 	MountLabel  string
+	// MCPServers maps OpenCode server names to their connection settings.
+	MCPServers map[string]MCPServer
 }
 
 // DefaultOptions returns the launcher's configuration defaults.
@@ -54,19 +63,23 @@ func (input Options) validate() error {
 	if _, err := getEndpoint(input.BaseURL); err != nil {
 		return err
 	}
-	if input.MCPURL != "" {
-		if _, err := getEndpoint(input.MCPURL); err != nil {
-			return err
+	ports := map[int]string{}
+	for name, server := range input.MCPServers {
+		if strings.TrimSpace(name) == "" || strings.ContainsRune(name, '\x00') {
+			return errors.New("MCP server names must be nonempty and cannot contain NUL bytes")
+		}
+		if server.Port != 0 {
+			if previous, exists := ports[server.Port]; exists {
+				return fmt.Errorf("MCP servers %q and %q use the same container port %d", previous, name, server.Port)
+			}
+			ports[server.Port] = name
+		}
+		if err := server.validate(); err != nil {
+			return fmt.Errorf("mcp.%s: %w", name, err)
 		}
 	}
 	if input.BindAddress != "" && net.ParseIP(input.BindAddress) == nil {
 		return errors.New("container.bind_address must be an IP address")
-	}
-	if input.MCPURL != "" && len(input.MCPCommand) > 0 {
-		return errors.New("choose mcp.url or mcp.command, not both")
-	}
-	if input.MCPPort != 0 && (input.MCPPort < 1024 || input.MCPPort > 65535 || input.MCPPort == 4096) {
-		return errors.New("MCP port must be between 1024 and 65535, excluding OpenCode port 4096")
 	}
 	if input.Model == "" {
 		return errors.New("enter a model ID")
@@ -77,12 +90,35 @@ func (input Options) validate() error {
 	if input.Name != "" && !resourceName.MatchString(input.Name) {
 		return errors.New("invalid container name")
 	}
-	if len(input.MCPCommand) > 0 && strings.TrimSpace(input.MCPCommand[0]) == "" {
-		return errors.New("MCP command requires an executable")
+	return nil
+}
+
+func (server MCPServer) validate() error {
+	if server.Port != 0 && (server.Port < 1024 || server.Port > 65535 || server.Port == 4096) {
+		return errors.New("MCP port must be between 1024 and 65535, excluding OpenCode port 4096")
 	}
-	for _, argument := range input.MCPCommand {
+	if server.URL != "" {
+		if _, err := getEndpoint(server.URL); err != nil {
+			return err
+		}
+	}
+	if server.Port == 0 && server.URL == "" {
+		return errors.New("MCP server requires url or a published port")
+	}
+	if len(server.HostCommand) > 0 {
+		if server.URL == "" {
+			return errors.New("host_command requires url")
+		}
+		if _, err := hostMCPAddress(server); err != nil {
+			return err
+		}
+	}
+	if len(server.HostCommand) > 0 && strings.TrimSpace(server.HostCommand[0]) == "" {
+		return errors.New("host_command requires an executable")
+	}
+	for _, argument := range server.HostCommand {
 		if strings.ContainsRune(argument, '\x00') {
-			return errors.New("MCP command arguments cannot contain NUL bytes")
+			return errors.New("host_command arguments cannot contain NUL bytes")
 		}
 	}
 	return nil
@@ -133,6 +169,59 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 	if err != nil {
 		return resolvedOptions{}, err
 	}
+	// Resolved launch settings must not mutate the caller's map or argument arrays.
+	options.MCPServers = make(map[string]MCPServer, len(input.MCPServers))
+	for name, server := range input.MCPServers {
+		options.MCPServers[name] = server
+	}
+	for name, server := range options.MCPServers {
+		if len(server.HostCommand) == 0 {
+			continue
+		}
+		directory, err := os.Getwd()
+		if err != nil {
+			return resolvedOptions{}, err
+		}
+		resolved, err := filepath.EvalSymlinks(directory)
+		if err != nil {
+			return resolvedOptions{}, err
+		}
+		executable, err := exec.LookPath(server.HostCommand[0])
+		if err != nil {
+			return resolvedOptions{}, fmt.Errorf("mcp.%s host executable: %w", name, err)
+		}
+		executable, err = filepath.Abs(executable)
+		if err != nil {
+			return resolvedOptions{}, err
+		}
+		resolvedExecutable, err := filepath.EvalSymlinks(executable)
+		if err != nil {
+			return resolvedOptions{}, err
+		}
+		if err := validateHostExecutableChain(executable, options.mounts); err != nil {
+			return resolvedOptions{}, fmt.Errorf("mcp.%s host executable: %w", name, err)
+		}
+		for _, mount := range options.mounts {
+			if mount.readOnly {
+				continue
+			}
+			writable, err := filepath.EvalSymlinks(mount.path)
+			if err != nil {
+				return resolvedOptions{}, err
+			}
+			if pathsOverlap(directory, mount.path) || pathsOverlap(resolved, writable) {
+				return resolvedOptions{}, fmt.Errorf("mcp.%s host command launch directory must not overlap writable agent mounts", name)
+			}
+			if pathsOverlap(executable, mount.path) || pathsOverlap(resolvedExecutable, writable) {
+				return resolvedOptions{}, fmt.Errorf("mcp.%s host executable must not overlap writable agent mounts", name)
+			}
+		}
+		// Do not repeat PATH lookup after engine preparation: an agent could
+		// create a shadow executable in an earlier, writable PATH directory.
+		server.HostCommand = append([]string(nil), server.HostCommand...)
+		server.HostCommand[0] = executable
+		options.MCPServers[name] = server
+	}
 	options.workdir = options.mounts[0].path
 	var token [24]byte
 	if _, err := rand.Read(token[:]); err != nil {
@@ -147,6 +236,63 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 		options.Name = fmt.Sprintf("bob-%d-%s", os.Getuid(), options.password[:8])
 	}
 	return options, nil
+}
+
+// validateHostExecutableChain checks intermediate symlinks as well as the final
+// target. Retaining a safe lexical path preserves virtualenv interpreter identity.
+func validateHostExecutableChain(executable string, mounts []mount) error {
+	var writable []string
+	for _, mount := range mounts {
+		if !mount.readOnly {
+			resolved, err := filepath.EvalSymlinks(mount.path)
+			if err != nil {
+				return err
+			}
+			writable = append(writable, mount.path, resolved)
+		}
+	}
+	parts := strings.Split(executable, string(filepath.Separator))
+	current := string(filepath.Separator)
+	links := 0
+	for len(parts) > 0 {
+		part := parts[0]
+		parts = parts[1:]
+		if part == "" || part == "." {
+			continue
+		}
+		if part == ".." {
+			current = filepath.Dir(current)
+			continue
+		}
+		candidate := filepath.Join(current, part)
+		for _, directory := range writable {
+			relative, err := filepath.Rel(directory, candidate)
+			if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+				return errors.New("host executable must not overlap writable agent mounts, including intermediate symlinks")
+			}
+		}
+		info, err := os.Lstat(candidate)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			current = candidate
+			continue
+		}
+		links++
+		if links > 255 {
+			return errors.New("too many host executable symlinks")
+		}
+		target, err := os.Readlink(candidate)
+		if err != nil {
+			return err
+		}
+		if filepath.IsAbs(target) {
+			current = string(filepath.Separator)
+		}
+		parts = append(strings.Split(target, string(filepath.Separator)), parts...)
+	}
+	return nil
 }
 
 type mount struct {

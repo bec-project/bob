@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -92,8 +93,10 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 		bindAddress = "[" + bindAddress + "]"
 	}
 	args = append(args, "--publish", bindAddress+"::4096/tcp")
-	if options.MCPPort != 0 {
-		args = append(args, "--publish", fmt.Sprintf("127.0.0.1::%d/tcp", options.MCPPort))
+	for _, name := range mcpServerNames(options.MCPServers) {
+		if port := options.MCPServers[name].Port; port != 0 {
+			args = append(args, "--publish", fmt.Sprintf("127.0.0.1::%d/tcp", port))
+		}
 	}
 
 	// Pass values through the environment to keep tokens out of CLI arguments.
@@ -135,8 +138,11 @@ func getLaunchEnvironment(options resolvedOptions) ([]string, error) {
 		groups = gid
 	}
 	endpoints := []string{options.BaseURL}
-	if options.MCPURL != "" {
-		endpoints = append(endpoints, options.MCPURL)
+	names := mcpServerNames(options.MCPServers)
+	for _, name := range names {
+		if endpoint := options.MCPServers[name].URL; endpoint != "" {
+			endpoints = append(endpoints, endpoint)
+		}
 	}
 	encoded, err := json.Marshal(endpoints)
 	if err != nil {
@@ -148,10 +154,11 @@ func getLaunchEnvironment(options resolvedOptions) ([]string, error) {
 		"LLM_MODEL_ID=" + options.Model, "OPENCODE_SERVER_PASSWORD=" + options.password,
 	}
 	mcp := map[string]any{}
-	if len(options.MCPCommand) > 0 {
-		mcp["bob"] = map[string]any{"type": "local", "command": options.MCPCommand, "enabled": true}
-	} else if options.MCPURL != "" {
-		mcp["bob"] = map[string]any{"type": "remote", "url": options.MCPURL, "oauth": false, "enabled": true}
+	for _, name := range names {
+		server := options.MCPServers[name]
+		if server.URL != "" {
+			mcp[name] = map[string]any{"type": "remote", "url": server.URL, "oauth": false, "enabled": true}
+		}
 	}
 	if len(mcp) > 0 {
 		encoded, err := json.Marshal(map[string]any{"mcp": mcp})
@@ -201,4 +208,13 @@ func validateDockerMapping(info string) error {
 		}
 	}
 	return nil
+}
+
+func mcpServerNames(servers map[string]MCPServer) []string {
+	names := make([]string, 0, len(servers))
+	for name := range servers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
