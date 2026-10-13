@@ -42,9 +42,10 @@ ro = ["notes", "/absolute/data"]
 base_url = "http://example.invalid/v1"
 model = "custom-model"
 
-[mcp]
+[mcp.bob]
 port = 19000
-command = ["python3", "/mounted/path with spaces/server.py", "--label", "a quoted \"value\""]
+host_command = ["python3", "/host/path with spaces/server.py", "--label", "a quoted \"value\""]
+url = "http://host.docker.internal:19000/mcp"
 `)
 	input, err := getOptions([]string{"--config", path})
 	if err != nil {
@@ -56,10 +57,10 @@ command = ["python3", "/mounted/path with spaces/server.py", "--label", "a quote
 	if input.Workdir != filepath.Join(filepath.Dir(path), "working") || len(input.ReadWrite) != 2 || input.ReadWrite[0] != filepath.Join(filepath.Dir(path), "repo") || input.ReadWrite[1] != filepath.Join(filepath.Dir(path), "other") || len(input.ReadOnly) != 2 || input.ReadOnly[0] != filepath.Join(filepath.Dir(path), "notes") || input.ReadOnly[1] != "/absolute/data" {
 		t.Fatalf("incorrect paths: RW %v, RO %v", input.ReadWrite, input.ReadOnly)
 	}
-	if !reflect.DeepEqual(input.MCPCommand, []string{"python3", "/mounted/path with spaces/server.py", "--label", `a quoted "value"`}) {
+	if !reflect.DeepEqual(input.MCPServers["bob"].HostCommand, []string{"python3", "/host/path with spaces/server.py", "--label", `a quoted "value"`}) {
 		t.Fatal("MCP command arguments changed")
 	}
-	if input.BaseURL != "http://example.invalid/v1" || input.Model != "custom-model" || input.APIKey != "synthetic-key" || input.MCPPort != 19000 {
+	if input.BaseURL != "http://example.invalid/v1" || input.Model != "custom-model" || input.APIKey != "synthetic-key" || input.MCPServers["bob"].Port != 19000 {
 		t.Fatal("lost provider or port configuration")
 	}
 }
@@ -74,7 +75,7 @@ base_url = "http://example.invalid/v1"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Web || input.Runtime != "podman" || input.Image != "localhost/bob" || input.HomeVolume != "bob-cli-home" || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || input.MCPPort != 0 || len(input.ReadWrite) != 0 {
+	if input.Web || input.Runtime != "podman" || input.Image != "localhost/bob" || input.HomeVolume != "bob-cli-home" || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || len(input.MCPServers) != 0 || len(input.ReadWrite) != 0 {
 		t.Fatal("incorrect defaults")
 	}
 }
@@ -199,14 +200,14 @@ bind_address = "127.0.0.1"
 workdir = "/repo"
 [provider]
 base_url = "http://example.invalid/agent/"
-[mcp]
+[mcp.bob]
 url = "http://mcp.example:8000/mcp"
 `)
 	input, err := loadConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.MCPURL != "http://mcp.example:8000/mcp" || input.BindAddress != "127.0.0.1" {
+	if input.MCPServers["bob"].URL != "http://mcp.example:8000/mcp" || input.BindAddress != "127.0.0.1" {
 		t.Fatal("remote MCP or API binding lost")
 	}
 }
@@ -219,5 +220,75 @@ func TestMountLabelConfig(t *testing.T) {
 	}
 	if input.MountLabel != "shared" {
 		t.Fatal("mount labeling policy was not loaded")
+	}
+}
+
+func TestNamedMCPConfig(t *testing.T) {
+	path := writeConfig(t, `[workspace]
+workdir = "/repo"
+[provider]
+base_url = "http://example.invalid/v1"
+[mcp.bec_mcp]
+port = 19000
+url = "http://mcp.example:8000/mcp"
+[mcp.other_tools]
+url = "https://tools.example/mcp"
+`)
+	input, err := loadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]containermanager.MCPServer{
+		"bec_mcp":     {Port: 19000, URL: "http://mcp.example:8000/mcp"},
+		"other_tools": {URL: "https://tools.example/mcp"},
+	}
+	if !reflect.DeepEqual(input.MCPServers, want) {
+		t.Fatal("named MCP configuration was not preserved")
+	}
+}
+
+func TestMCPConfigRejectsUnknownFieldsAndWrongTypes(t *testing.T) {
+	for _, content := range []string{
+		"[mcp]\nprot = 19000",
+		"[mcp]\nurl = 123",
+		"[mcp.bec_mcp]\nurll = \"http://mcp.example/mcp\"",
+		"[mcp.bec_mcp]\ncommand = \"python3\"",
+		"[mcp.bec_mcp]\ncommand = [\"python3\"]",
+		"[mcp]\nport = 19000",
+		"[mcp]\nurl = \"http://mcp.example/mcp\"",
+	} {
+		path := writeConfig(t, "[workspace]\nworkdir = \"/repo\"\n[provider]\nbase_url = \"http://example.invalid/v1\"\n"+content)
+		if _, err := loadConfig(path); err == nil {
+			t.Errorf("accepted invalid MCP config: %s", content)
+		}
+	}
+}
+
+func TestHostMCPConfigNeedsNoWorkingDirectory(t *testing.T) {
+	path := writeConfig(t, `[workspace]
+workdir = "agent-workspace"
+[provider]
+base_url = "http://example.invalid/v1"
+[mcp.bec_mcp]
+url = "http://host.docker.internal:19000/mcp"
+host_command = ["/host/python", "-m", "bec_mcp_server", "--allow-unauthenticated"]
+`)
+	input, err := loadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := input.MCPServers["bec_mcp"]
+	if len(server.HostCommand) != 4 {
+		t.Fatal("host MCP configuration was not preserved")
+	}
+}
+
+func TestContainerMCPCommandIsRejected(t *testing.T) {
+	for _, command := range []string{`["python3", "/container/server.py"]`, `[]`, `"python3"`} {
+		path := writeConfig(t, "[workspace]\nworkdir = \"/repo\"\n[provider]\nbase_url = \"https://example.invalid/v1\"\n[mcp.bec_mcp]\ncommand = "+command)
+		_, err := loadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "mcp.bec_mcp.command is unsupported") {
+			t.Fatalf("container command did not get a clear rejection: %v", err)
+		}
 	}
 }

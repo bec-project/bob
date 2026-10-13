@@ -8,8 +8,8 @@ docker build -t localhost/bob ./container
 ```
 
 Rebuild after changes to the Dockerfile, entrypoint, firewall, or OpenCode configuration.
-The image includes Node.js and Python for local MCP servers; add other dependencies at
-build time because outbound downloads are restricted.
+The image includes Node.js and Python for agent tasks. MCP servers run outside the
+container; install their dependencies on their own host.
 
 ## Bootstrap
 
@@ -21,7 +21,8 @@ failure prevents agent execution. See the manager's [network policy](../containe
 The manager supplies provider settings (`LLM_BASE_URL`, `LLM_MODEL_ID`, `API_KEY`), the
 endpoint allowlist (`BOB_EGRESS_URLS`), filesystem identity (`BOB_UID`, `BOB_GID`,
 `BOB_GROUPS`), the generated `OPENCODE_SERVER_PASSWORD`, and optional MCP configuration
-(`OPENCODE_CONFIG_CONTENT`). Prefer the manager for validated mounts and runtime settings.
+(`OPENCODE_CONFIG_CONTENT`). OpenCode merges these named MCP entries into the empty
+`mcp` section in `/etc/opencode/opencode.json` at runtime. Prefer the manager for validated mounts and runtime settings.
 
 The server listens on `0.0.0.0:4096` with HTTP Basic authentication as `opencode`.
 `/home/opencode` holds persistent configuration and sessions. Provider/MCP addresses must

@@ -7,17 +7,6 @@ import (
 	"testing"
 )
 
-func TestValidateMCPCommand(t *testing.T) {
-	for _, command := range [][]string{{""}, {"  "}, {"python3", "bad\x00argument"}} {
-		input := DefaultOptions()
-		input.BaseURL = "http://example.invalid/v1"
-		input.MCPCommand = command
-		if err := input.validate(); err == nil {
-			t.Fatalf("accepted invalid MCP command %q", command)
-		}
-	}
-}
-
 func TestMountLabelValidation(t *testing.T) {
 	input := DefaultOptions()
 	input.BaseURL = "https://provider.example/"
@@ -37,7 +26,7 @@ func TestMCPPort(t *testing.T) {
 	for _, port := range []int{0, 1024, 19000, 65535} {
 		input := DefaultOptions()
 		input.BaseURL = "https://example.invalid/agent/"
-		input.MCPPort = port
+		input.MCPServers = map[string]MCPServer{"bob": {Port: port, URL: "http://example.invalid/mcp"}}
 		if err := input.validate(); err != nil {
 			t.Fatalf("rejected valid port %d: %v", port, err)
 		}
@@ -45,7 +34,7 @@ func TestMCPPort(t *testing.T) {
 	for _, port := range []int{-1, 1, 4096, 65536} {
 		input := DefaultOptions()
 		input.BaseURL = "https://example.invalid/agent/"
-		input.MCPPort = port
+		input.MCPServers = map[string]MCPServer{"bob": {Port: port, URL: "http://example.invalid/mcp"}}
 		if err := input.validate(); err == nil {
 			t.Fatalf("accepted invalid port %d", port)
 		}
@@ -161,5 +150,70 @@ func TestMountDestinationsProtectTemporaryFilesystemAndImageAliases(t *testing.T
 	}
 	if _, err := getMounts(Options{Workdir: "/tmp"}); err == nil {
 		t.Fatal("accepted a workspace conflicting with the mandatory tmpfs")
+	}
+}
+
+func TestNamedMCPValidation(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		server MCPServer
+	}{
+		{"", MCPServer{URL: "http://example.invalid/mcp"}},
+		{"  ", MCPServer{URL: "http://example.invalid/mcp"}},
+		{"bad\x00name", MCPServer{URL: "http://example.invalid/mcp"}},
+		{"bec_mcp", MCPServer{}},
+		{"bec_mcp", MCPServer{URL: "ftp://example.invalid/mcp"}},
+	} {
+		input := DefaultOptions()
+		input.BaseURL = "http://example.invalid/v1"
+		input.MCPServers = map[string]MCPServer{test.name: test.server}
+		if err := input.validate(); err == nil {
+			t.Errorf("accepted invalid MCP server %q", test.name)
+		}
+	}
+	input := DefaultOptions()
+	input.BaseURL = "http://example.invalid/v1"
+	input.MCPServers = map[string]MCPServer{"bob": {URL: "http://example.invalid/mcp"}}
+	if err := input.validate(); err != nil {
+		t.Fatal(err)
+	}
+	input.MCPServers = map[string]MCPServer{"bec_mcp": {URL: "http://example.invalid/mcp"}}
+	if err := input.validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMCPPortsMustBeUnique(t *testing.T) {
+	input := DefaultOptions()
+	input.BaseURL = "http://example.invalid/v1"
+	input.MCPServers = map[string]MCPServer{
+		"first":  {Port: 19000},
+		"second": {Port: 19000},
+	}
+	if err := input.validate(); err == nil {
+		t.Fatal("accepted duplicate published container ports")
+	}
+	input.MCPServers["second"] = MCPServer{Port: 19001}
+	if err := input.validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHostMCPValidation(t *testing.T) {
+	for _, server := range []MCPServer{
+		{HostCommand: []string{"python3"}},
+		{URL: "http://host.docker.internal:19000/mcp", HostCommand: []string{" "}},
+		{URL: "http://host.docker.internal:19000/mcp", HostCommand: []string{"python3", "bad\x00arg"}},
+		{URL: "http://example.invalid/mcp", HostCommand: []string{"python3"}},
+		{URL: "http://localhost:19000/mcp", HostCommand: []string{"python3"}},
+		{URL: "http://127.0.0.1:19000/mcp", HostCommand: []string{"python3"}},
+		{URL: "http://[::1]:19000/mcp", HostCommand: []string{"python3"}},
+	} {
+		if err := server.validate(); err == nil {
+			t.Fatal("accepted invalid host MCP configuration")
+		}
+	}
+	if err := (MCPServer{URL: "http://host.docker.internal:19000/mcp", HostCommand: []string{"python3"}}).validate(); err != nil {
+		t.Fatalf("host command requires an unnecessary directory: %v", err)
 	}
 }

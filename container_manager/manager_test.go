@@ -23,6 +23,34 @@ func TestContainerIntegration(t *testing.T) {
 	upstream := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/mcp" {
 			w.Header().Set("Content-Type", "application/json")
+			if r.Method == http.MethodPost {
+				var request struct {
+					ID     json.RawMessage `json:"id"`
+					Method string          `json:"method"`
+					Params struct {
+						ProtocolVersion string `json:"protocolVersion"`
+					} `json:"params"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					http.Error(w, "invalid MCP request", http.StatusBadRequest)
+					return
+				}
+				if len(request.ID) == 0 {
+					w.WriteHeader(http.StatusAccepted)
+					return
+				}
+				result := map[string]any{}
+				switch request.Method {
+				case "initialize":
+					result = map[string]any{"protocolVersion": request.Params.ProtocolVersion,
+						"capabilities": map[string]any{"tools": map[string]any{}},
+						"serverInfo":   map[string]any{"name": "bob-test", "version": "1"}}
+				case "tools/list":
+					result["tools"] = []any{}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result})
+				return
+			}
 			fmt.Fprint(w, `{"synthetic":"mcp"}`)
 			return
 		}
@@ -79,27 +107,13 @@ func TestContainerIntegration(t *testing.T) {
 		ReadOnly:   []string{reference},
 		BaseURL:    baseURL,
 		Model:      "demo-model",
-		MCPPort:    19000,
 		APIKey:     "synthetic-provider-token",
-		MCPCommand: []string{"python3", "-u", "-c", `
-import json, sys
-for line in sys.stdin:
-    request = json.loads(line)
-    if "id" not in request:
-        continue
-    if request["method"] == "initialize":
-        result = {"protocolVersion": request["params"]["protocolVersion"], "capabilities": {"tools": {}}, "serverInfo": {"name": "bob-test", "version": "1"}}
-    elif request["method"] == "tools/list":
-        result = {"tools": []}
-    else:
-        result = {}
-    print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}), flush=True)
-`},
+		MCPServers: map[string]MCPServer{"bob": {Port: 19000, URL: fmt.Sprintf("http://host.docker.internal:%d/mcp", listener.Addr().(*net.TCPAddr).Port)}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if connection.MCPPort == "" || connection.Password == "" {
+	if connection.MCPPorts["bob"] == "" || connection.Password == "" {
 		t.Fatal("missing dynamic MCP port or server authentication")
 	}
 	binary, err := getExecutable("docker")
@@ -125,9 +139,9 @@ for line in sys.stdin:
 		Model   string   `json:"model"`
 		Enabled []string `json:"enabled_providers"`
 		MCP     map[string]struct {
-			Type    string   `json:"type"`
-			Command []string `json:"command"`
-			Enabled bool     `json:"enabled"`
+			Type    string `json:"type"`
+			URL     string `json:"url"`
+			Enabled bool   `json:"enabled"`
 		} `json:"mcp"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&config); err != nil {
@@ -136,8 +150,8 @@ for line in sys.stdin:
 	if config.Model != "self-hosted/demo-model" || len(config.Enabled) != 1 || config.Enabled[0] != "self-hosted" {
 		t.Fatal("backend did not load the restricted provider configuration")
 	}
-	if config.MCP["bob"].Type != "local" || !config.MCP["bob"].Enabled || len(config.MCP["bob"].Command) != 4 {
-		t.Fatal("MCP launch command was not configured")
+	if config.MCP["bob"].Type != "remote" || !config.MCP["bob"].Enabled || config.MCP["bob"].URL == "" {
+		t.Fatal("remote MCP endpoint was not configured")
 	}
 	req, _ = http.NewRequestWithContext(ctx, "GET", connection.URL+"/mcp", nil)
 	req.SetBasicAuth("opencode", connection.Password)
@@ -286,7 +300,7 @@ for path in ("/var/run/docker.sock", "/run/podman/podman.sock"):
 		HomeVolume: volume,
 		Workdir:    workspace,
 		ReadWrite:  []string{second, workspace},
-		MCPURL:     fmt.Sprintf("http://host.docker.internal:%d/mcp", listener.Addr().(*net.TCPAddr).Port),
+		MCPServers: map[string]MCPServer{"bob": {URL: fmt.Sprintf("http://host.docker.internal:%d/mcp", listener.Addr().(*net.TCPAddr).Port)}},
 		ReadOnly:   []string{reference},
 		BaseURL:    baseURL,
 		Model:      "demo-model",
@@ -320,4 +334,55 @@ assert urllib.request.urlopen(url+"?session=synthetic").read() == b'{"synthetic"
 		t.Fatalf("bootstrap did not fail closed and clean up: %v", err)
 	}
 
+}
+
+func TestConnectionReportsNamedMCPPorts(t *testing.T) {
+	root := t.TempDir()
+	binary := filepath.Join(root, "engine")
+	script := `#!/bin/sh
+[ "$1" = port ] && [ "$2" = owned-container ] || exit 1
+case "$3" in
+  4096/tcp) echo 0.0.0.0:40000 ;;
+  19000/tcp) echo 127.0.0.1:40001 ;;
+  19001/tcp) echo 127.0.0.1:40002 ;;
+  *) exit 1 ;;
+esac
+`
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	input := DefaultOptions()
+	input.Name = "owned-container"
+	input.MCPServers = map[string]MCPServer{
+		"bec_mcp":     {Port: 19000},
+		"bob":         {Port: 19001},
+		"remote_only": {URL: "https://example.invalid/mcp"},
+	}
+	options := resolvedOptions{Options: input, binary: binary, mounts: []mount{{path: "/workspace"}}}
+	connection, err := getConnection(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if connection.URL != "http://127.0.0.1:40000" || len(connection.MCPPorts) != 2 || connection.MCPPorts["bec_mcp"] != "127.0.0.1:40001" || connection.MCPPorts["bob"] != "127.0.0.1:40002" {
+		t.Fatal("published ports were not associated with their MCP names")
+	}
+	encoded, err := json.Marshal(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"mcpPorts":{`) || strings.Contains(string(encoded), `"mcpPort":`) {
+		t.Fatal("connection JSON does not use named MCP ports")
+	}
+	options.MCPServers = nil
+	connection, err = getConnection(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err = json.Marshal(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"mcpPorts"`) {
+		t.Fatal("included MCP ports without published MCP servers")
+	}
 }

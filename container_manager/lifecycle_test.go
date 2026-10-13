@@ -87,6 +87,10 @@ case "$1" in
     rm "$BOB_TEST_STATE/created"
     touch "$BOB_TEST_STATE/removed"
     if [ -e "$BOB_TEST_STATE/lose-remove-response" ]; then exit 1; fi ;;
+  port)
+    if [ -e "$BOB_TEST_STATE/port-error" ]; then
+      if [ "$3" = 4096/tcp ]; then echo 127.0.0.1:4096; else echo 'port lookup failed' >&2; exit 1; fi
+    fi ;;
   inspect) if [ -e "$BOB_TEST_STATE/home-failed" ]; then echo 42; else echo 0; fi ;;
 esac
 `
@@ -539,6 +543,27 @@ fi
 	output, err := exec.Command(binary, "ps", "--all", "--filter", "name="+options.Name, "--format", "{{.ID}}").Output()
 	if err != nil || strings.TrimSpace(string(output)) != "" {
 		t.Fatalf("cancelled creation left a container: %q, %v", output, err)
+	}
+	if manager.name != "" || manager.launchID != "" {
+		t.Fatal("successful cleanup retained launch state")
+	}
+}
+
+func TestNamedMCPPortLookupFailureCleansUp(t *testing.T) {
+	options, root := cancellationEngine(t)
+	options.MCPServers = map[string]MCPServer{"bec_mcp": {Port: 19000}}
+	for _, marker := range []string{"quick-create", "port-error"} {
+		if err := os.WriteFile(filepath.Join(root, marker), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manager := &Manager{}
+	_, err := manager.Start(context.Background(), options)
+	if err == nil || !strings.Contains(err.Error(), "port lookup failed") {
+		t.Fatalf("expected MCP port lookup failure, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "removed")); err != nil {
+		t.Fatalf("failed port lookup did not remove owned container: %v", err)
 	}
 	if manager.name != "" || manager.launchID != "" {
 		t.Fatal("successful cleanup retained launch state")

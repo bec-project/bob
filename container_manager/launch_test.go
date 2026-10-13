@@ -2,6 +2,7 @@ package containermanager
 
 import (
 	"encoding/json"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,8 +12,7 @@ func TestLaunchPreservesIdentityEndpointsAndArguments(t *testing.T) {
 	input := DefaultOptions()
 	input.Runtime = "docker"
 	input.BaseURL = "https://provider.example/agent/"
-	input.MCPPort = 19000
-	input.MCPURL = "http://mcp.example:8000/mcp"
+	input.MCPServers = map[string]MCPServer{"bob": {Port: 19000, URL: "http://mcp.example:8000/mcp"}}
 	input.APIKey = "synthetic-token"
 	options := resolvedOptions{Options: input, workdir: "/workspace/$project", password: "synthetic-password",
 		userConfig: userSettings{User: "1234:5678", Groups: []string{"9012", "5678"}}, mounts: []mount{{path: "/workspace/$project"}, {path: "/references", readOnly: true}}}
@@ -41,7 +41,7 @@ func TestLaunchPreservesIdentityEndpointsAndArguments(t *testing.T) {
 		t.Fatal("lost provider settings")
 	}
 	var endpoints []string
-	if err := json.Unmarshal([]byte(settings["BOB_EGRESS_URLS"]), &endpoints); err != nil || len(endpoints) != 2 || endpoints[1] != input.MCPURL {
+	if err := json.Unmarshal([]byte(settings["BOB_EGRESS_URLS"]), &endpoints); err != nil || len(endpoints) != 2 || endpoints[1] != input.MCPServers["bob"].URL {
 		t.Fatal("incorrect egress endpoints")
 	}
 	var config struct {
@@ -49,7 +49,7 @@ func TestLaunchPreservesIdentityEndpointsAndArguments(t *testing.T) {
 			URL string `json:"url"`
 		} `json:"mcp"`
 	}
-	if err := json.Unmarshal([]byte(settings["OPENCODE_CONFIG_CONTENT"]), &config); err != nil || config.MCP["bob"].URL != input.MCPURL {
+	if err := json.Unmarshal([]byte(settings["OPENCODE_CONFIG_CONTENT"]), &config); err != nil || config.MCP["bob"].URL != input.MCPServers["bob"].URL {
 		t.Fatal("incorrect remote MCP URL")
 	}
 	if !strings.Contains(command, "serve --hostname 0.0.0.0 --port 4096") {
@@ -59,24 +59,6 @@ func TestLaunchPreservesIdentityEndpointsAndArguments(t *testing.T) {
 	webArgs, _, err := getLaunchArgs(options)
 	if err != nil || !strings.Contains(strings.Join(webArgs, " "), "web --hostname 0.0.0.0 --port 4096") {
 		t.Fatal("web command was not selected")
-	}
-	options.MCPURL = ""
-	options.MCPCommand = []string{"sh", "-c", `printf '%s' "$HOME"`}
-	_, env, err = getLaunchArgs(options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range env {
-		if strings.HasPrefix(entry, "OPENCODE_CONFIG_CONTENT=") {
-			var config struct {
-				MCP map[string]struct {
-					Command []string `json:"command"`
-				} `json:"mcp"`
-			}
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(entry, "OPENCODE_CONFIG_CONTENT=")), &config); err != nil || config.MCP["bob"].Command[2] != options.MCPCommand[2] {
-				t.Fatal("MCP arguments changed")
-			}
-		}
 	}
 }
 
@@ -160,5 +142,104 @@ func TestHomeOwnershipIncludesExistingStateWithoutFollowingSymlinks(t *testing.T
 		if !strings.Contains(command, "--volume "+options.HomeVolume+":/home/opencode") || strings.Contains(command, "volume-nocopy") {
 			t.Fatalf("Docker launch prevents image home ownership initialization: %v", launchArgs)
 		}
+	}
+}
+
+func TestLaunchNamedMCPServers(t *testing.T) {
+	for _, engine := range []string{"docker", "podman"} {
+		t.Run(engine, func(t *testing.T) {
+			input := DefaultOptions()
+			input.Runtime = engine
+			input.BaseURL = "http://provider.example/v1"
+			input.MCPServers = map[string]MCPServer{
+				"bec_mcp":        {Port: 19000, URL: "http://bec.example:8000/mcp"},
+				"another_remote": {Port: 19001, URL: "https://tools.example/mcp"},
+			}
+			args, env, err := getLaunchArgs(resolvedOptions{Options: input})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, port := range []string{"127.0.0.1::19000/tcp", "127.0.0.1::19001/tcp"} {
+				if !strings.Contains(strings.Join(args, " "), "--publish "+port) {
+					t.Fatalf("missing named MCP port %s", port)
+				}
+			}
+			settings := map[string]string{}
+			for _, entry := range env {
+				key, value, _ := strings.Cut(entry, "=")
+				settings[key] = value
+			}
+			var endpoints []string
+			if err := json.Unmarshal([]byte(settings["BOB_EGRESS_URLS"]), &endpoints); err != nil {
+				t.Fatal(err)
+			}
+			wantEndpoints := []string{input.BaseURL, input.MCPServers["another_remote"].URL, input.MCPServers["bec_mcp"].URL}
+			if !reflect.DeepEqual(endpoints, wantEndpoints) {
+				t.Fatalf("egress endpoints: %v, want %v", endpoints, wantEndpoints)
+			}
+			var config struct {
+				MCP map[string]struct {
+					Type    string `json:"type"`
+					URL     string `json:"url"`
+					Enabled bool   `json:"enabled"`
+					OAuth   *bool  `json:"oauth"`
+				} `json:"mcp"`
+			}
+			if err := json.Unmarshal([]byte(settings["OPENCODE_CONFIG_CONTENT"]), &config); err != nil {
+				t.Fatal(err)
+			}
+			if len(config.MCP) != len(input.MCPServers) {
+				t.Fatal("lost named servers or added a hardcoded name")
+			}
+			for name, server := range input.MCPServers {
+				got := config.MCP[name]
+				if !got.Enabled || got.URL != server.URL {
+					t.Fatalf("lost settings for %s", name)
+				}
+				if server.URL != "" && (got.Type != "remote" || got.OAuth == nil || *got.OAuth) {
+					t.Fatalf("incorrect remote settings for %s", name)
+				}
+
+			}
+		})
+	}
+}
+
+func TestPortOnlyMCPDoesNotConfigureOpenCode(t *testing.T) {
+	input := DefaultOptions()
+	input.MCPServers = map[string]MCPServer{"bec_mcp": {Port: 19000}}
+	args, env, err := getLaunchArgs(resolvedOptions{Options: input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "--publish 127.0.0.1::19000/tcp") {
+		t.Fatal("port-only MCP entry was not published")
+	}
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "OPENCODE_CONFIG_CONTENT=") {
+			t.Fatal("port-only MCP entry added an OpenCode connection")
+		}
+	}
+}
+
+func TestHostMCPCommandIsNeverSentToContainer(t *testing.T) {
+	options := resolvedOptions{Options: DefaultOptions()}
+	options.BaseURL = "https://provider.example/v1"
+	options.MCPServers = map[string]MCPServer{"bec_mcp": {
+		URL:         "http://host.docker.internal:19000/mcp",
+		HostCommand: []string{"/private/host/python", "-m", "private_host_module"},
+	}}
+	args, env, err := getLaunchArgs(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serialized := strings.Join(append(args, env...), "\n")
+	for _, forbidden := range []string{"/private/host", "private_host_module"} {
+		if strings.Contains(serialized, forbidden) {
+			t.Fatal("host MCP command leaked into container configuration")
+		}
+	}
+	if !strings.Contains(serialized, "host.docker.internal:19000/mcp") || strings.Contains(serialized, "6379") {
+		t.Fatal("container did not retain just the MCP endpoint")
 	}
 }
