@@ -7,6 +7,9 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -75,10 +78,7 @@ func (m *Manager) startHostMCPs(ctx context.Context, servers map[string]MCPServe
 			process.err = cmd.Wait()
 			// Reap foreground-command children immediately, not on a later Stop
 			// when the exited parent's process-group ID could have been reused.
-			process.groupErr = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			if errors.Is(process.groupErr, syscall.ESRCH) {
-				process.groupErr = nil
-			}
+			process.groupErr = signalHostMCPGroup(cmd.Process.Pid, syscall.SIGKILL)
 			close(process.done)
 		}()
 		ticker := time.NewTicker(100 * time.Millisecond)
@@ -146,7 +146,7 @@ func stopHostMCP(parent context.Context, process *hostMCPProcess) error {
 	default:
 	}
 	// Signal the group, so command wrappers and their children cannot survive cleanup.
-	if err := syscall.Kill(-process.cmd.Process.Pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+	if err := signalHostMCPGroup(process.cmd.Process.Pid, syscall.SIGTERM); err != nil {
 		return err
 	}
 	timer := time.NewTimer(2 * time.Second)
@@ -163,7 +163,7 @@ func stopHostMCP(parent context.Context, process *hostMCPProcess) error {
 		return process.groupErr
 	default:
 	}
-	if err := syscall.Kill(-process.cmd.Process.Pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+	if err := signalHostMCPGroup(process.cmd.Process.Pid, syscall.SIGKILL); err != nil {
 		return err
 	}
 	select {
@@ -172,4 +172,42 @@ func stopHostMCP(parent context.Context, process *hostMCPProcess) error {
 	case <-parent.Done():
 		return parent.Err()
 	}
+}
+
+func signalHostMCPGroup(pid int, signal syscall.Signal) error {
+	err := syscall.Kill(-pid, signal)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	if runtime.GOOS == "darwin" && errors.Is(err, syscall.EPERM) {
+		// Darwin excludes zombies when signalling a group, returning EPERM
+		// when no live members remain. Do not swallow genuine permission errors.
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		output, inspectErr := exec.CommandContext(ctx, "/bin/ps", "-axo", "pgid=,stat=").Output()
+		if inspectErr == nil && hostMCPGroupExited(string(output), pid) {
+			return nil
+		}
+	}
+	return err
+}
+
+func hostMCPGroupExited(output string, pid int) bool {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if len(fields) != 2 {
+			return false
+		}
+		group, err := strconv.Atoi(fields[0])
+		if err != nil || fields[1] == "" {
+			return false
+		}
+		if group == pid && fields[1][0] != 'Z' {
+			return false
+		}
+	}
+	return true
 }

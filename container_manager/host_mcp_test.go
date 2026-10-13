@@ -1,14 +1,17 @@
 package containermanager
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -27,8 +30,8 @@ func hostMCPFixture(t *testing.T) (MCPServer, string) {
 	listener.Close()
 	server := MCPServer{
 		URL: "http://host.docker.internal:" + strconv.Itoa(port) + "/mcp",
-		HostCommand: []string{python, "-u", "-c", `import http.server,sys
-http.server.HTTPServer(("127.0.0.1",int(sys.argv[1])),http.server.BaseHTTPRequestHandler).serve_forever()
+		HostCommand: []string{python, "-u", "-c", `import socketserver,sys
+socketserver.TCPServer(("127.0.0.1",int(sys.argv[1])),socketserver.BaseRequestHandler).serve_forever()
 `, strconv.Itoa(port)},
 	}
 	return server, net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
@@ -40,6 +43,96 @@ func assertHostPortClosed(t *testing.T, address string) {
 	if err == nil {
 		connection.Close()
 		t.Fatal("host MCP listener survived cleanup")
+	}
+}
+
+func TestHostMCPGroupExitedRequiresNoLiveMembers(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		output string
+		exited bool
+	}{
+		{"absent", "99 S\n", true},
+		{"zombie", "42 Z\n42 Z+\n99 S\n", true},
+		{"live", "42 S\n", false},
+		{"mixed", "42 Z\n42 R\n", false},
+		{"unknown", "42 ?\n", false},
+		{"malformed", "unexpected output\n", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := hostMCPGroupExited(test.output, 42); got != test.exited {
+				t.Fatalf("group exited = %v, want %v", got, test.exited)
+			}
+		})
+	}
+}
+
+func TestHostMCPFixtureDoesNotResolveHostnames(t *testing.T) {
+	server, address := hostMCPFixture(t)
+	server.HostCommand[3] = "import socket\ndef reject_dns(*args):\n raise RuntimeError('fixture must not resolve hostnames')\nsocket.getfqdn = reject_dns\n" + server.HostCommand[3]
+	manager := &Manager{}
+	t.Cleanup(func() { _ = manager.Stop(context.Background()) })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := manager.startHostMCPs(ctx, map[string]MCPServer{"bec_mcp": server}); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	assertHostPortClosed(t, address)
+}
+
+func TestHostMCPDarwinZombieGroupCleanup(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Darwin reports EPERM for zombie-only process groups")
+	}
+	server, _ := hostMCPFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	cmd := exec.CommandContext(ctx, server.HostCommand[0], "-u", "-c", `import os,sys
+pid = os.fork()
+if pid == 0:
+    os.setpgid(0, 0)
+    os._exit(0)
+os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
+print(pid, flush=True)
+sys.stdin.readline()
+os.waitpid(pid, 0)
+`)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		// Release the synthetic parent so it reaps its own zombie child.
+		_ = stdin.Close()
+		_ = cmd.Wait()
+		cancel()
+	})
+	scanner := bufio.NewScanner(stdout)
+	if !scanner.Scan() {
+		t.Fatal("zombie fixture did not report its process group")
+	}
+	pid, err := strconv.Atoi(scanner.Text())
+	if err != nil || pid <= 1 {
+		t.Fatalf("invalid fixture process group: %q", scanner.Text())
+	}
+	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("unexpected zombie-only group signal result: %v", err)
+	}
+	if err := signalHostMCPGroup(pid, syscall.SIGKILL); err != nil {
+		t.Fatalf("zombie-only group cleanup failed: %v", err)
 	}
 }
 
@@ -159,9 +252,9 @@ func TestHostMCPInheritedDirectoryCannotBeAgentWritable(t *testing.T) {
 
 func TestHostMCPCleanupCanBeRetriedAfterCancellation(t *testing.T) {
 	server, address := hostMCPFixture(t)
-	server.HostCommand[3] = `import http.server,signal,sys
+	server.HostCommand[3] = `import socketserver,signal,sys
 signal.signal(signal.SIGTERM,signal.SIG_IGN)
-http.server.HTTPServer(("127.0.0.1",int(sys.argv[1])),http.server.BaseHTTPRequestHandler).serve_forever()
+socketserver.TCPServer(("127.0.0.1",int(sys.argv[1])),socketserver.BaseRequestHandler).serve_forever()
 `
 	manager := &Manager{}
 	t.Cleanup(func() { _ = manager.Stop(context.Background()) })
@@ -293,9 +386,9 @@ func TestHostMCPInheritsLauncherDirectory(t *testing.T) {
 	directory := t.TempDir()
 	marker := filepath.Join(directory, "host-cwd")
 	t.Chdir(directory)
-	server.HostCommand[3] = `import http.server,os,pathlib,sys
+	server.HostCommand[3] = `import socketserver,os,pathlib,sys
 pathlib.Path(sys.argv[2]).write_text(os.getcwd())
-http.server.HTTPServer(("127.0.0.1",int(sys.argv[1])),http.server.BaseHTTPRequestHandler).serve_forever()
+socketserver.TCPServer(("127.0.0.1",int(sys.argv[1])),socketserver.BaseRequestHandler).serve_forever()
 `
 	server.HostCommand = append(server.HostCommand, marker)
 	manager := &Manager{}
