@@ -2,6 +2,7 @@ package containermanager
 
 import (
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -150,7 +151,14 @@ func TestHomeOwnershipIncludesExistingStateWithoutFollowingSymlinks(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(launchArgs, " "), "--mount type=volume,src="+options.HomeVolume+",dst=/home/opencode,volume-nocopy") {
-		t.Fatalf("Docker launch can overwrite prepared empty-home ownership: %v", launchArgs)
+	command := strings.Join(launchArgs, " ")
+	if runtime.GOOS == "linux" {
+		if !strings.Contains(command, "--mount type=volume,src="+options.HomeVolume+",dst=/home/opencode,volume-nocopy") {
+			t.Fatalf("Docker launch can overwrite prepared empty-home ownership: %v", launchArgs)
+		}
+	} else {
+		if !strings.Contains(command, "--volume "+options.HomeVolume+":/home/opencode") || strings.Contains(command, "volume-nocopy") {
+			t.Fatalf("Docker launch prevents image home ownership initialization: %v", launchArgs)
+		}
 	}
 }

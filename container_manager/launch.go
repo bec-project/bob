@@ -49,10 +49,11 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 		"--tmpfs", "/tmp:mode=1777",
 		"--workdir", options.workdir,
 	}
-	if options.Runtime == "docker" {
+	if options.Runtime == "docker" && runtime.GOOS == "linux" {
 		// An empty prepared volume must not inherit the image's UID again.
 		args = append(args, "--mount", "type=volume,src="+options.HomeVolume+",dst=/home/opencode,volume-nocopy")
 	} else {
+		// Without ownership preparation, retain the image's home ownership on copy-up.
 		args = append(args, "--volume", options.HomeVolume+":/home/opencode")
 	}
 	args = append(args, seccompArgs(options.Runtime)...)
