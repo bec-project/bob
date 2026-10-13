@@ -142,7 +142,7 @@ func (m *Manager) stopHostMCPs(parent context.Context) error {
 func stopHostMCP(parent context.Context, process *hostMCPProcess) error {
 	select {
 	case <-process.done:
-		return process.groupErr
+		return finishedHostMCPCleanup(parent, process)
 	default:
 	}
 	// Signal the group, so command wrappers and their children cannot survive cleanup.
@@ -153,14 +153,14 @@ func stopHostMCP(parent context.Context, process *hostMCPProcess) error {
 	defer timer.Stop()
 	select {
 	case <-process.done:
-		return process.groupErr
+		return finishedHostMCPCleanup(parent, process)
 	case <-parent.Done():
 		return parent.Err()
 	case <-timer.C:
 	}
 	select {
 	case <-process.done:
-		return process.groupErr
+		return finishedHostMCPCleanup(parent, process)
 	default:
 	}
 	if err := signalHostMCPGroup(process.cmd.Process.Pid, syscall.SIGKILL); err != nil {
@@ -168,10 +168,35 @@ func stopHostMCP(parent context.Context, process *hostMCPProcess) error {
 	}
 	select {
 	case <-process.done:
-		return process.groupErr
+		return finishedHostMCPCleanup(parent, process)
 	case <-parent.Done():
 		return parent.Err()
 	}
+}
+
+func finishedHostMCPCleanup(parent context.Context, process *hostMCPProcess) error {
+	if process.groupErr == nil {
+		return nil
+	}
+	// Once the parent has been reaped, its group ID could have been reused.
+	// Retry observation only: never signal that ID again after a cached error.
+	exited, err := inspectHostMCPGroup(parent, process.cmd.Process.Pid)
+	if err == nil && exited {
+		return nil
+	}
+	return errors.Join(process.groupErr, err)
+}
+
+func inspectHostMCPGroup(parent context.Context, pid int) (bool, error) {
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+	defer cancel()
+	// The shared command runner isolates its process group from terminal
+	// interrupts and kills that group if the independent inspection times out.
+	output, err := command(ctx, "/bin/ps", nil, "-axo", "pgid=,stat=")
+	if err != nil {
+		return false, err
+	}
+	return hostMCPGroupExited(output, pid), nil
 }
 
 func signalHostMCPGroup(pid int, signal syscall.Signal) error {
@@ -182,10 +207,8 @@ func signalHostMCPGroup(pid int, signal syscall.Signal) error {
 	if runtime.GOOS == "darwin" && errors.Is(err, syscall.EPERM) {
 		// Darwin excludes zombies when signalling a group, returning EPERM
 		// when no live members remain. Do not swallow genuine permission errors.
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		output, inspectErr := exec.CommandContext(ctx, "/bin/ps", "-axo", "pgid=,stat=").Output()
-		if inspectErr == nil && hostMCPGroupExited(string(output), pid) {
+		exited, inspectErr := inspectHostMCPGroup(context.Background(), pid)
+		if inspectErr == nil && exited {
 			return nil
 		}
 	}
