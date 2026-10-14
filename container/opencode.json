@@ -16,7 +16,14 @@
       },
       "models": {
         "{env:LLM_MODEL_ID}": {
-          "name": "{env:LLM_MODEL_ID}"
+          "name": "{env:LLM_MODEL_ID}",
+          "variants": {
+            "no-thinking": {
+              "chat_template_kwargs": {
+                "enable_thinking": false
+              }
+            }
+          }
         }
       }
     }
