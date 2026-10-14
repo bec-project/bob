@@ -45,6 +45,14 @@ base_url = "https://ai-provider.example.com/api/"
 model = "Qwen3.8-27B"
 # Optional provider/gateway token. Overrides API_KEY, including an explicit empty token.
 # token = "your-user-token"
+# Optional model context window in tokens, passed to OpenCode as the model's limit.
+# OpenCode uses it to show how full the context is and to compact a session before it overflows.
+# PSI's gateway reports max_model_len 262144 for Qwen3.8-27B.
+# Default: 0 (unset; OpenCode receives no limit).
+# context_limit = 262144
+# Optional maximum output in tokens. Requires context_limit and must be smaller than it.
+# Default: 0, which uses min(32768, context_limit / 4) when context_limit is set.
+# output_limit = 32768
 
 # Name each MCP through its table key; add more tables for additional servers.
 # The name is used unchanged in OpenCode's mcp configuration.

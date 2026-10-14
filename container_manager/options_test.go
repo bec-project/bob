@@ -217,3 +217,54 @@ func TestHostMCPValidation(t *testing.T) {
 		t.Fatalf("host command requires an unnecessary directory: %v", err)
 	}
 }
+
+func TestModelLimitValidation(t *testing.T) {
+	for _, limits := range [][2]int{{0, 0}, {262144, 0}, {262144, 32768}, {262144, 262143}, {2, 1}} {
+		input := DefaultOptions()
+		input.BaseURL = "http://example.invalid/v1"
+		input.ContextLimit, input.OutputLimit = limits[0], limits[1]
+		if err := input.validate(); err != nil {
+			t.Errorf("rejected valid limits %v: %v", limits, err)
+		}
+	}
+	for _, test := range []struct {
+		limits [2]int
+		want   string
+	}{
+		{[2]int{-1, 0}, "provider.context_limit must not be negative"},
+		{[2]int{-262144, 32768}, "provider.context_limit must not be negative"},
+		{[2]int{0, -1}, "provider.output_limit must not be negative"},
+		{[2]int{262144, -1}, "provider.output_limit must not be negative"},
+		{[2]int{0, 32768}, "provider.output_limit requires provider.context_limit"},
+		{[2]int{32768, 32768}, "provider.output_limit must be smaller than provider.context_limit"},
+		{[2]int{32768, 65536}, "provider.output_limit must be smaller than provider.context_limit"},
+	} {
+		input := DefaultOptions()
+		input.BaseURL = "http://example.invalid/v1"
+		input.ContextLimit, input.OutputLimit = test.limits[0], test.limits[1]
+		if err := input.validate(); err == nil || err.Error() != test.want {
+			t.Errorf("limits %v returned %v, want %q", test.limits, err, test.want)
+		}
+		// Launch preparation must reject them before any engine command runs.
+		if _, err := getResolvedOptions(input); err == nil || err.Error() != test.want {
+			t.Errorf("resolved limits %v returned %v, want %q", test.limits, err, test.want)
+		}
+	}
+}
+
+func TestModelLimitDefaultsOutput(t *testing.T) {
+	for _, test := range []struct{ context, output, wantContext, wantOutput int }{
+		{0, 0, 0, 0},
+		{262144, 0, 262144, 32768},
+		{131072, 0, 131072, 32768},
+		{65536, 0, 65536, 16384},
+		{1000, 0, 1000, 250},
+		{262144, 8192, 262144, 8192},
+		{262144, 65536, 262144, 65536},
+	} {
+		input := Options{ContextLimit: test.context, OutputLimit: test.output}
+		if context, output := input.modelLimit(); context != test.wantContext || output != test.wantOutput {
+			t.Errorf("limits (%d, %d) resolved to (%d, %d), want (%d, %d)", test.context, test.output, context, output, test.wantContext, test.wantOutput)
+		}
+	}
+}

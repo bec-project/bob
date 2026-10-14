@@ -243,3 +243,96 @@ func TestHostMCPCommandIsNeverSentToContainer(t *testing.T) {
 		t.Fatal("container did not retain just the MCP endpoint")
 	}
 }
+
+func TestLaunchModelLimit(t *testing.T) {
+	const remote = `"mcp":{"bob":{"enabled":true,"oauth":false,"type":"remote","url":"http://mcp.example:8000/mcp"}}`
+	const limit = `"provider":{"self-hosted":{"models":{"Qwen3.8-27B":{"limit":{"context":262144,"output":32768}}}}}`
+	for _, test := range []struct {
+		name            string
+		model           string
+		context, output int
+		mcp             bool
+		// want is the exact OPENCODE_CONFIG_CONTENT value; empty means the variable is absent.
+		want string
+	}{
+		{"unset", "", 0, 0, false, ""},
+		{"unset with MCP", "", 0, 0, true, "{" + remote + "}"},
+		{"default output", "", 262144, 0, false, "{" + limit + "}"},
+		{"default output with MCP", "", 262144, 0, true, "{" + remote + "," + limit + "}"},
+		{"small context", "", 65536, 0, false, `{"provider":{"self-hosted":{"models":{"Qwen3.8-27B":{"limit":{"context":65536,"output":16384}}}}}}`},
+		{"explicit output and model", "vendor/model:7b", 131072, 8192, true, "{" + remote + `,"provider":{"self-hosted":{"models":{"vendor/model:7b":{"limit":{"context":131072,"output":8192}}}}}}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			input := DefaultOptions()
+			input.BaseURL = "https://provider.example/v1"
+			input.APIKey = "synthetic-token"
+			if test.model != "" {
+				input.Model = test.model
+			}
+			if test.mcp {
+				input.MCPServers = map[string]MCPServer{"bob": {Port: 19000, URL: "http://mcp.example:8000/mcp"}}
+			}
+			options := resolvedOptions{Options: input, password: "synthetic-password", userConfig: userSettings{User: "1234:5678"}}
+			unlimited, err := getLaunchEnvironment(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			options.ContextLimit, options.OutputLimit = test.context, test.output
+			args, environment, err := getLaunchArgs(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, entry := range environment {
+				if value, found := strings.CutPrefix(entry, "OPENCODE_CONFIG_CONTENT="); found {
+					got = append(got, value)
+				}
+			}
+			if test.want == "" && len(got) != 0 || test.want != "" && (len(got) != 1 || got[0] != test.want) {
+				t.Fatalf("OPENCODE_CONFIG_CONTENT: %q, want %q", got, test.want)
+			}
+			// The limit changes only the OpenCode configuration, never other variables.
+			withoutConfig := func(environment []string) []string {
+				var kept []string
+				for _, entry := range environment {
+					if !strings.HasPrefix(entry, "OPENCODE_CONFIG_CONTENT=") {
+						kept = append(kept, entry)
+					}
+				}
+				return kept
+			}
+			if !reflect.DeepEqual(withoutConfig(environment), withoutConfig(unlimited)) {
+				t.Fatalf("limit changed the launch environment: %v, want %v", environment, unlimited)
+			}
+			// Values pass by name only, keeping the command line stable.
+			names := 0
+			for i, arg := range args {
+				if arg == "--env" && i+1 < len(args) && args[i+1] == "OPENCODE_CONFIG_CONTENT" {
+					names++
+				}
+			}
+			if names != len(got) || strings.Contains(strings.Join(args, " "), `"limit"`) {
+				t.Fatalf("OpenCode configuration not passed by environment name: %v", args)
+			}
+		})
+	}
+}
+
+func TestLaunchEnvironmentWithoutModelLimitOrMCP(t *testing.T) {
+	input := DefaultOptions()
+	input.BaseURL = "https://provider.example/v1"
+	input.APIKey = "synthetic-token"
+	options := resolvedOptions{Options: input, password: "synthetic-password", userConfig: userSettings{User: "1234:5678", Groups: []string{"9012"}}}
+	environment, err := getLaunchEnvironment(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`BOB_EGRESS_URLS=["https://provider.example/v1"]`, "BOB_UID=1234", "BOB_GID=5678", "BOB_GROUPS=9012",
+		"API_KEY=synthetic-token", "LLM_BASE_URL=https://provider.example/v1",
+		"LLM_MODEL_ID=Qwen3.8-27B", "OPENCODE_SERVER_PASSWORD=synthetic-password",
+	}
+	if !reflect.DeepEqual(environment, want) {
+		t.Fatalf("environment: %v, want %v", environment, want)
+	}
+}

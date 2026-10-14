@@ -20,9 +20,10 @@ failure prevents agent execution. See the manager's [network policy](../containe
 
 The manager supplies provider settings (`LLM_BASE_URL`, `LLM_MODEL_ID`, `API_KEY`), the
 endpoint allowlist (`BOB_EGRESS_URLS`), filesystem identity (`BOB_UID`, `BOB_GID`,
-`BOB_GROUPS`), the generated `OPENCODE_SERVER_PASSWORD`, and optional MCP configuration
-(`OPENCODE_CONFIG_CONTENT`). OpenCode merges these named MCP entries into the empty
-`mcp` section in `/etc/opencode/opencode.json` at runtime. Prefer the manager for validated mounts and runtime settings.
+`BOB_GROUPS`), the generated `OPENCODE_SERVER_PASSWORD`, and optional MCP configuration and
+model limits (`OPENCODE_CONFIG_CONTENT`). OpenCode merges these named MCP entries into the empty
+`mcp` section in `/etc/opencode/opencode.json` at runtime, and a `provider.context_limit` from
+bob.toml into the `self-hosted` model's `limit`. Prefer the manager for validated mounts and runtime settings.
 
 The server listens on `0.0.0.0:4096` with HTTP Basic authentication as `opencode`.
 `/home/opencode` holds persistent configuration and sessions. Provider/MCP addresses must

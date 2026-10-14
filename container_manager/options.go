@@ -40,9 +40,19 @@ type Options struct {
 	APIKey      string
 	BindAddress string
 	MountLabel  string
+	// ContextLimit is the model's context window in tokens. OpenCode uses it for its
+	// context meter and automatic compaction. Zero leaves OpenCode's model limits unset.
+	ContextLimit int
+	// OutputLimit is the model's maximum output in tokens. It requires ContextLimit and
+	// must be smaller than it. Zero selects min(32768, ContextLimit/4).
+	OutputLimit int
 	// MCPServers maps OpenCode server names to their connection settings.
 	MCPServers map[string]MCPServer
 }
+
+// defaultOutputLimit caps the output limit derived from ContextLimit; OpenCode's model
+// limit requires an output value whenever it receives a context window.
+const defaultOutputLimit = 32768
 
 // DefaultOptions returns the launcher's configuration defaults.
 // Callers must supply a working directory, a provider URL, and, when needed, an API key.
@@ -84,6 +94,18 @@ func (input Options) validate() error {
 	if input.Model == "" {
 		return errors.New("enter a model ID")
 	}
+	if input.ContextLimit < 0 {
+		return errors.New("provider.context_limit must not be negative")
+	}
+	if input.OutputLimit < 0 {
+		return errors.New("provider.output_limit must not be negative")
+	}
+	if input.OutputLimit != 0 && input.ContextLimit == 0 {
+		return errors.New("provider.output_limit requires provider.context_limit")
+	}
+	if input.OutputLimit != 0 && input.OutputLimit >= input.ContextLimit {
+		return errors.New("provider.output_limit must be smaller than provider.context_limit")
+	}
 	if !resourceName.MatchString(input.HomeVolume) {
 		return errors.New("a valid named home volume is required")
 	}
@@ -91,6 +113,18 @@ func (input Options) validate() error {
 		return errors.New("invalid container name")
 	}
 	return nil
+}
+
+// modelLimit returns the context and output token limits passed to OpenCode, or zeros
+// when no context limit is configured.
+func (input Options) modelLimit() (int, int) {
+	if input.ContextLimit <= 0 {
+		return 0, 0
+	}
+	if input.OutputLimit > 0 {
+		return input.ContextLimit, input.OutputLimit
+	}
+	return input.ContextLimit, min(defaultOutputLimit, input.ContextLimit/4)
 }
 
 func (server MCPServer) validate() error {

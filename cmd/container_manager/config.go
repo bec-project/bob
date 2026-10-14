@@ -29,9 +29,11 @@ type config struct {
 		MountLabel string   `toml:"mount_label"`
 	} `toml:"workspace"`
 	Provider struct {
-		BaseURL string  `toml:"base_url"`
-		Model   string  `toml:"model"`
-		Token   *string `toml:"token"`
+		BaseURL      string  `toml:"base_url"`
+		Model        string  `toml:"model"`
+		Token        *string `toml:"token"`
+		ContextLimit int     `toml:"context_limit"`
+		OutputLimit  int     `toml:"output_limit"`
 	} `toml:"provider"`
 	MCP map[string]struct {
 		Port        int      `toml:"port"`
@@ -62,19 +64,21 @@ func loadConfig(path string) (containermanager.Options, error) {
 		return input, fmt.Errorf("read config %s: %w", path, err)
 	}
 	input = containermanager.Options{
-		Runtime:     settings.Container.Runtime,
-		Web:         settings.Container.Web,
-		Image:       settings.Container.Image,
-		HomeVolume:  settings.Container.HomeVolume,
-		Name:        settings.Container.Name,
-		Workdir:     settings.Workspace.Workdir,
-		ReadWrite:   settings.Workspace.RW,
-		ReadOnly:    settings.Workspace.RO,
-		MountLabel:  settings.Workspace.MountLabel,
-		BaseURL:     settings.Provider.BaseURL,
-		Model:       settings.Provider.Model,
-		BindAddress: settings.Container.BindAddress,
-		APIKey:      os.Getenv("API_KEY"),
+		Runtime:      settings.Container.Runtime,
+		Web:          settings.Container.Web,
+		Image:        settings.Container.Image,
+		HomeVolume:   settings.Container.HomeVolume,
+		Name:         settings.Container.Name,
+		Workdir:      settings.Workspace.Workdir,
+		ReadWrite:    settings.Workspace.RW,
+		ReadOnly:     settings.Workspace.RO,
+		MountLabel:   settings.Workspace.MountLabel,
+		BaseURL:      settings.Provider.BaseURL,
+		Model:        settings.Provider.Model,
+		ContextLimit: settings.Provider.ContextLimit,
+		OutputLimit:  settings.Provider.OutputLimit,
+		BindAddress:  settings.Container.BindAddress,
+		APIKey:       os.Getenv("API_KEY"),
 	}
 	if len(settings.MCP) > 0 {
 		input.MCPServers = make(map[string]containermanager.MCPServer, len(settings.MCP))

@@ -22,6 +22,12 @@ The CLI reads `bob.toml`, or `--config PATH`. See
   such as `/tmp/workspace` are allowed. Custom images must preserve these filesystem assumptions.
 - **Provider:** `provider.base_url` must be a container-reachable OpenAI-compatible API.
   `provider.token` overrides `API_KEY`; an explicit empty token clears it.
+  Optional `provider.context_limit` sets the model's context window in tokens; OpenCode
+  uses it for its context meter and automatic compaction. Optional `provider.output_limit`
+  requires `context_limit`, must be smaller, and defaults to min(32768, context_limit/4).
+  Both default to 0 (unset). Bob merges the limit into the image's `self-hosted` provider
+  through `OPENCODE_CONFIG_CONTENT`, keyed by `provider.model`, so no image rebuild is
+  needed; custom images must keep that provider name. Negative values are rejected.
 - **MCP:** use named tables such as `[mcp.bec_mcp]`; their keys become OpenCode server
   names. Set `mcp.<name>.url` to an HTTP(S) MCP endpoint outside the container.
   In-container stdio MCP commands are unsupported; TOML `command` entries are rejected.

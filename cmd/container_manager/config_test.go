@@ -41,6 +41,8 @@ ro = ["notes", "/absolute/data"]
 [provider]
 base_url = "http://example.invalid/v1"
 model = "custom-model"
+context_limit = 262144
+output_limit = 16_384
 
 [mcp.bob]
 port = 19000
@@ -63,6 +65,9 @@ url = "http://host.docker.internal:19000/mcp"
 	if input.BaseURL != "http://example.invalid/v1" || input.Model != "custom-model" || input.APIKey != "synthetic-key" || input.MCPServers["bob"].Port != 19000 {
 		t.Fatal("lost provider or port configuration")
 	}
+	if input.ContextLimit != 262144 || input.OutputLimit != 16384 {
+		t.Fatalf("lost model limits: context %d, output %d", input.ContextLimit, input.OutputLimit)
+	}
 }
 
 func TestOptionsDefaults(t *testing.T) {
@@ -75,7 +80,7 @@ base_url = "http://example.invalid/v1"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Web || input.Runtime != "podman" || input.Image != "localhost/bob" || input.HomeVolume != "bob-cli-home" || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || len(input.MCPServers) != 0 || len(input.ReadWrite) != 0 {
+	if input.Web || input.Runtime != "podman" || input.Image != "localhost/bob" || input.HomeVolume != "bob-cli-home" || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || len(input.MCPServers) != 0 || len(input.ReadWrite) != 0 || input.ContextLimit != 0 || input.OutputLimit != 0 {
 		t.Fatal("incorrect defaults")
 	}
 }
@@ -289,6 +294,46 @@ func TestContainerMCPCommandIsRejected(t *testing.T) {
 		_, err := loadConfig(path)
 		if err == nil || !strings.Contains(err.Error(), "mcp.bec_mcp.command is unsupported") {
 			t.Fatalf("container command did not get a clear rejection: %v", err)
+		}
+	}
+}
+
+func TestProviderModelLimitConfig(t *testing.T) {
+	for _, test := range []struct {
+		config                  string
+		wantContext, wantOutput int
+	}{
+		{"", 0, 0},
+		{"context_limit = 262144", 262144, 0},
+		{"context_limit = 262144\noutput_limit = 32768", 262144, 32768},
+		{"context_limit = 0\noutput_limit = 0", 0, 0},
+		// Range checks belong to manager validation, which reports the setting by name.
+		{"context_limit = -1\noutput_limit = 32768", -1, 32768},
+	} {
+		path := writeConfig(t, "[workspace]\nworkdir = \"/repo\"\n[provider]\nbase_url = \"http://example.invalid/v1\"\n"+test.config)
+		input, err := loadConfig(path)
+		if err != nil {
+			t.Fatalf("%q: %v", test.config, err)
+		}
+		if input.ContextLimit != test.wantContext || input.OutputLimit != test.wantOutput {
+			t.Errorf("%q loaded context %d, output %d", test.config, input.ContextLimit, input.OutputLimit)
+		}
+	}
+}
+
+func TestProviderModelLimitConfigRejectsWrongTypes(t *testing.T) {
+	for _, content := range []string{
+		`context_limit = "262144"`,
+		`context_limit = 262144.5`,
+		`context_limit = [262144]`,
+		`output_limit = true`,
+		`context_limit = 99999999999999999999`,
+		`contextlimit = 262144`,
+		`max_tokens = 32768`,
+	} {
+		path := writeConfig(t, "[workspace]\nworkdir = \"/repo\"\n[provider]\nbase_url = \"http://example.invalid/v1\"\n"+content)
+		if _, err := loadConfig(path); err == nil {
+			t.Errorf("accepted invalid model limit config: %s", content)
 		}
 	}
 }

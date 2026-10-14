@@ -19,6 +19,9 @@ type userSettings struct {
 
 const launchLabel = "io.bob.launch"
 
+// openCodeProvider is the provider name defined in the image's container/opencode.json.
+const openCodeProvider = "self-hosted"
+
 func seccompArgs(engine string) []string {
 	if engine == "docker" {
 		// Override daemon defaults, including seccomp=unconfined.
@@ -153,6 +156,7 @@ func getLaunchEnvironment(options resolvedOptions) ([]string, error) {
 		"API_KEY=" + options.APIKey, "LLM_BASE_URL=" + options.BaseURL,
 		"LLM_MODEL_ID=" + options.Model, "OPENCODE_SERVER_PASSWORD=" + options.password,
 	}
+	config := map[string]any{}
 	mcp := map[string]any{}
 	for _, name := range names {
 		server := options.MCPServers[name]
@@ -161,7 +165,16 @@ func getLaunchEnvironment(options resolvedOptions) ([]string, error) {
 		}
 	}
 	if len(mcp) > 0 {
-		encoded, err := json.Marshal(map[string]any{"mcp": mcp})
+		config["mcp"] = mcp
+	}
+	if contextLimit, outputLimit := options.modelLimit(); contextLimit > 0 {
+		// OpenCode deep-merges this into the image configuration, whose model key is the model ID.
+		config["provider"] = map[string]any{openCodeProvider: map[string]any{"models": map[string]any{
+			options.Model: map[string]any{"limit": map[string]any{"context": contextLimit, "output": outputLimit}},
+		}}}
+	}
+	if len(config) > 0 {
+		encoded, err := json.Marshal(config)
 		if err != nil {
 			return nil, err
 		}
