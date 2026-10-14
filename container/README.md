@@ -24,6 +24,11 @@ endpoint allowlist (`BOB_EGRESS_URLS`), filesystem identity (`BOB_UID`, `BOB_GID
 (`OPENCODE_CONFIG_CONTENT`). OpenCode merges these named MCP entries into the empty
 `mcp` section in `/etc/opencode/opencode.json` at runtime. Prefer the manager for validated mounts and runtime settings.
 
+The self-hosted model has a `no-thinking` variant that sends
+`chat_template_kwargs: {"enable_thinking": false}`, which vLLM-served Qwen models honour.
+A client selects it per message by sending `"variant": "no-thinking"` with the prompt;
+without it the model reasons as usual.
+
 The server listens on `0.0.0.0:4096` with HTTP Basic authentication as `opencode`.
 `/home/opencode` holds persistent configuration and sessions. Provider/MCP addresses must
 be reachable from inside the container: `localhost` refers to the container. Docker
