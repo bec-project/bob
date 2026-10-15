@@ -27,11 +27,23 @@ container; sessions remain in the home volume. For host-only access, set
 With `--shared`, every program of a user shares one bob: the first one starts it, the others
 attach, and it stops after the last one is gone. See [shared mode](container_manager/README.md#shared-mode).
 
+For bob's own chat GUI instead of OpenCode's browser UI, start both together (Node 20+):
+
+```sh
+npm --prefix gui install
+npm --prefix gui run bob -- --config bob.toml
+```
+
+It shows the container's sessions, the model's thinking, tool calls, time and token usage,
+and a thinking switch; a BEC plugin adds report cards and a device panel. It also runs as a
+Tauri desktop app. See the [GUI guide](gui/README.md).
+
 ## Documentation
 
 - [Configuration example](bob.example.toml) — settings and defaults
 - [Container manager](container_manager/README.md) — configuration, network policy, isolation limits, and testing
 - [Container image](container/README.md) — building and bootstrap
+- [GUI](gui/README.md) — the chat UI, its desktop app and plugins
 
 The firewall filters IP addresses and ports, not domains or URL paths. Review the
 [isolation limits](container_manager/README.md#isolation-limits) before choosing mounts.
