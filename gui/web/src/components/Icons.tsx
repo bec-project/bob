@@ -84,14 +84,12 @@ export const IconChip = make(
     <path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4" />
   </>,
 );
-export const IconLogo = make(
-  <>
-    <rect x="4" y="7" width="16" height="12" rx="4" />
-    <circle cx="9.5" cy="13" r="1.4" fill="currentColor" stroke="none" />
-    <circle cx="14.5" cy="13" r="1.4" fill="currentColor" stroke="none" />
-    <path d="M12 7V4M10 4h4" />
-  </>,
-);
+/** bob's logo, `public/bob.png` (the desktop app's icon set is made from the same picture). */
+export function IconLogo({ size = 16 }: { size?: number }) {
+  return (
+    <img src="/bob.png" width={size} height={size} alt="" aria-hidden="true" style={{ display: "block" }} />
+  );
+}
 export const IconAlert = make(
   <>
     <path d="M12 3l9.5 16.5H2.5L12 3z" />
