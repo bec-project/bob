@@ -23,8 +23,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+          go-version-file: launcher/go.mod
+          cache-dependency-path: launcher/go.sum
       - uses: actions/setup-node@v7
         with:
           node-version: '24'

@@ -14,7 +14,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "bob": "node scripts/bob-gui.mjs",
-    "tauri": "tauri"
+    "tauri": "TAURI_APP_PATH=../desktop tauri"
   },
   "dependencies": {
     "@opencode-ai/sdk": "1.18.35",

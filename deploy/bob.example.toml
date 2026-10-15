@@ -4,7 +4,7 @@
 web = true
 # Container engine: "docker" or "podman". Default: "podman".
 runtime = "docker"
-# Image tag to launch; build this image from ./container first.
+# Image tag to launch; build this image from ./image first.
 # Default: "localhost/bob".
 image = "localhost/bob"
 # Named volume that preserves OpenCode's home, configuration, and sessions.

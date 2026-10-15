@@ -42,7 +42,7 @@ func parseArgs(args []string) (invocation, error) {
 	flags.Usage = func() {
 		fmt.Fprintln(flags.Output(), "Usage: container_manager [--config PATH] [--shared [--linger DURATION] [--consumer NAME]]")
 		flags.PrintDefaults()
-		fmt.Fprintln(flags.Output(), "\nCreate bob.toml from the repository's bob.example.toml and edit its workspace,")
+		fmt.Fprintln(flags.Output(), "\nCreate bob.toml from the repository's deploy/bob.example.toml and edit its workspace,")
 		fmt.Fprintln(flags.Output(), "or select an existing file with --config PATH.")
 	}
 	if err := flags.Parse(args); err != nil {

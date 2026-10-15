@@ -435,7 +435,7 @@ mod tests {
     /// Joins (starts) a real shared bob, finds it among the running containers, ends the lease
     /// and checks that the broker removes the container. Needs an engine and an image; use a
     /// private BOB_RUNTIME_DIR so the test does not join your own shared bob:
-    /// BOB_RUNTIME_DIR=$(mktemp -d) BOB_GUI_E2E_BIN=build/bob-manager
+    /// BOB_RUNTIME_DIR=$(mktemp -d) BOB_GUI_E2E_BIN=$PWD/../../build/bob-manager
     /// BOB_GUI_E2E_CONFIG=/path/bob.toml cargo test -- --ignored
     #[test]
     #[ignore]

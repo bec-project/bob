@@ -1,5 +1,5 @@
 //! Desktop shell for bob's chat GUI. The window shows the same frontend as the browser build;
-//! these commands stand in for what the Vite server does there (see gui/server/bob-server.ts).
+//! these commands stand in for what the Vite server does there (see gui/web/server/bob-server.ts).
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -40,7 +40,7 @@ struct RelayResponse {
     body: String,
 }
 
-/// The connection bob printed, when scripts/bob-gui.mjs started this app with BOB_CONNECTION_FILE.
+/// The connection bob printed, when gui/web/scripts/bob-gui.mjs started this app with BOB_CONNECTION_FILE.
 #[tauri::command]
 fn bob_connection() -> Option<String> {
     let path = std::env::var_os("BOB_CONNECTION_FILE")?;

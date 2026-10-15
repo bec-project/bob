@@ -13,7 +13,7 @@ including preparation helpers; a conflicting container name is never removed.
 ## Configuration
 
 The CLI reads `bob.toml`, or `--config PATH`. See
-[bob.example.toml](../bob.example.toml) for all settings and defaults.
+[bob.example.toml](../../deploy/bob.example.toml) for all settings and defaults.
 
 - **Workspace:** `workspace.workdir` is required and writable. Add mounts with `rw` and
   `ro`; relative paths resolve beside the config, and mounts preserve absolute host paths.
@@ -143,24 +143,26 @@ firewall, and no CPU, memory, or PID limits are configured.
 
 ## Development
 
-Run from the repository root:
+Run the Go commands from `launcher/` and the firewall tests from the repository root:
 
 ```sh
+cd launcher
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
-go build -o build/bob-manager ./cmd/container_manager
-python3 -m unittest discover -s container -p network_test.py
+go build -o ../build/bob-manager ./cmd/container_manager
+cd ..
+python3 -m unittest discover -s image -p network_test.py
 ```
 
 Unit tests need no engine; firewall tests use host Python 3.11+. Docker integration tests
 use synthetic HTTP/MCP servers and clean up their own containers and volumes:
 
 ```sh
-docker build -t localhost/bob ./container
-BOB_CONTAINER_TEST=1 go test -race ./...
+docker build -t localhost/bob ./image
+cd launcher && BOB_CONTAINER_TEST=1 go test -race ./...
 ```
 
-Rebuild the image after bootstrap changes. See [CI workflows](../.github/workflows) for
+Rebuild the image after bootstrap changes. See [CI workflows](../../.github/workflows) for
 checks and release publishing.
 
 ## Release delivery

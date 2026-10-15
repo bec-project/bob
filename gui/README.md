@@ -30,8 +30,8 @@ The same frontend runs in a browser and as a [Tauri](https://tauri.app) desktop 
 Requires Node 20+ (and Go, to build bob). From the repository root:
 
 ```sh
-npm --prefix gui install
-npm --prefix gui run bob -- --config bob.toml
+npm --prefix gui/web install
+npm --prefix gui/web run bob -- --config bob.toml
 ```
 
 This builds bob, joins your shared bob (starting it when none runs), waits for its connection
@@ -42,7 +42,7 @@ listens on 127.0.0.1 only, hands that connection to its page, and so to any loca
 asks for it: on a host shared with other users, start bob yourself and paste the connection
 into a GUI started without `BOB_CONNECTION_FILE` instead.
 
-To connect to a bob you started yourself, run `npm --prefix gui run dev` and paste the JSON
+To connect to a bob you started yourself, run `npm --prefix gui/web run dev` and paste the JSON
 line bob printed into the connect screen.
 
 `container.web` can stay `false`: the GUI only needs the API that `serve` provides.
@@ -54,11 +54,11 @@ The desktop app needs a Rust toolchain and the
 line tools on macOS; WebKitGTK on Linux).
 
 ```sh
-npm --prefix gui run bob -- --config bob.toml --desktop   # bob + the app, in development mode
-npm --prefix gui run tauri build                          # a bundle in src-tauri/target/release/bundle
+npm --prefix gui/web run bob -- --config bob.toml --desktop   # bob + the app, in development mode
+npm --prefix gui/web run tauri build                          # a bundle in gui/desktop/target/release/bundle
 ```
 
-The desktop app uses your shared bob (see bob's [shared mode](../container_manager/README.md#shared-mode)):
+The desktop app uses your shared bob (see bob's [shared mode](../launcher/container_manager/README.md#shared-mode)):
 when it opens, it joins the bob you already run, or starts it with the remembered bob.toml when
 none runs, unless *Do this when the app opens* is off. It holds bob until you quit it or choose
 *Leave this bob* in Settings; bob stops 90 seconds after the last program that uses it (this
@@ -77,7 +77,7 @@ bob.
 ## Thinking
 
 OpenCode switches thinking off through a model *variant*. bob's image defines one for the
-self-hosted model in [`container/opencode.json`](../container/opencode.json):
+self-hosted model in [`image/opencode.json`](../image/opencode.json):
 
 ```json
 "variants": { "no-thinking": { "chat_template_kwargs": { "enable_thinking": false } } }
@@ -85,7 +85,7 @@ self-hosted model in [`container/opencode.json`](../container/opencode.json):
 
 `chat_template_kwargs` is what vLLM-served Qwen models honour (PSI's gateway included). The
 switch is greyed out for a model without a variant whose name contains `no-thinking`; rebuild
-the image (`docker build -t localhost/bob ./container`) to get it.
+the image (`docker build -t localhost/bob ./image`) to get it.
 
 ## Context
 
@@ -123,7 +123,7 @@ Switch it on in Settings → Plugins. Tool ids are matched by suffix, so `[mcp.b
   calls are parsed, never evaluated: only literals and `dev.<name>` are accepted.
 
 To try scan approvals and queue controls without a beamline, run
-[`scripts/fake_bec_dev_mcp.py`](scripts/fake_bec_dev_mcp.py) and add it to bob.toml as a second
+[`web/scripts/fake_bec_dev_mcp.py`](web/scripts/fake_bec_dev_mcp.py) and add it to bob.toml as a second
 server: it answers `bec_run_scan` and `bec_queue_control` like a DEV-mode server and only prints
 what it was asked.
 
@@ -136,8 +136,8 @@ lifetime only).
 
 ## Writing a plugin
 
-A plugin is a [`GuiPlugin`](src/plugins/types.ts) listed in
-[`src/plugins/registry.ts`](src/plugins/registry.ts). It can describe tool calls (a label, a
+A plugin is a [`GuiPlugin`](web/src/plugins/types.ts) listed in
+[`web/src/plugins/registry.ts`](web/src/plugins/registry.ts). It can describe tool calls (a label, a
 summary and a body drawn under the row), describe permission requests, add side panels and
 prompt suggestions, and add controls to its Settings row. Plugins only add views; the chat
 works without them.
@@ -146,23 +146,24 @@ works without them.
 
 | Path | What it holds |
 | --- | --- |
-| `src/api/` | OpenCode client (REST + event stream), connection parsing |
-| `src/state/` | Store, event reducer, turn and usage arithmetic |
-| `src/components/` | Chat UI, the changes panel and the todo card |
-| `src/plugins/` | Plugin API and the BEC plugin |
-| `server/bob-server.ts` | Vite plugin serving `/__bob/connection` and the MCP relay |
-| `scripts/bob-gui.mjs` | Launcher: bob + GUI |
-| `scripts/fake_bec_dev_mcp.py` | Stand-in DEV-mode BEC MCP server for trying write paths |
-| `src-tauri/` | Desktop shell: the same commands as `server/`, in Rust |
+| `web/src/api/` | OpenCode client (REST + event stream), connection parsing |
+| `web/src/state/` | Store, event reducer, turn and usage arithmetic |
+| `web/src/components/` | Chat UI, the changes panel and the todo card |
+| `web/src/plugins/` | Plugin API and the BEC plugin |
+| `web/server/bob-server.ts` | Vite plugin serving `/__bob/connection` and the MCP relay |
+| `web/scripts/bob-gui.mjs` | Launcher: bob + GUI |
+| `web/scripts/fake_bec_dev_mcp.py` | Stand-in DEV-mode BEC MCP server for trying write paths |
+| `desktop/` | Desktop shell: the same commands as `web/server/`, in Rust |
 
 ## Checks
 
 ```sh
+cd gui/web
 npm run typecheck
 npm test
 npx vite build
-(cd src-tauri && cargo fmt --check && cargo test)
+(cd ../desktop && cargo fmt --check && cargo test)
 ```
 
 Types of OpenCode's API come from `@opencode-ai/sdk`, pinned to the OpenCode version in
-`container/Dockerfile`; update both together.
+`image/Dockerfile`; update both together.

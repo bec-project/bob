@@ -8,5 +8,5 @@
 
 __pycache__/
 /.coverage
-/coverage.out
+/launcher/coverage.out
 /coverage.xml

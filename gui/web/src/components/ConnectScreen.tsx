@@ -204,7 +204,7 @@ export function ConnectScreen() {
           <div className="connect-hint">
             Start bob and the GUI together from the repository root, and the GUI connects by itself:
             <pre style={{ marginTop: 8 }}>
-              <code>npm --prefix gui run bob -- --config bob.toml</code>
+              <code>npm --prefix gui/web run bob -- --config bob.toml</code>
             </pre>
           </div>
         )}

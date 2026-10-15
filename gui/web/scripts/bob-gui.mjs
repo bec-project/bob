@@ -3,7 +3,7 @@
 // starts the GUI connected to it. Ctrl-C (or closing the desktop window) stops the GUI and ends
 // its hold on bob; bob stops 90 seconds after the last app that uses it is gone.
 //
-//   npm --prefix gui run bob -- [--config bob.toml] [--desktop] [--no-open]
+//   npm --prefix gui/web run bob -- [--config bob.toml] [--desktop] [--no-open]
 //
 // The connection (it holds the OpenCode password) goes to a private temporary file that only
 // this user can read; the GUI reads it through BOB_CONNECTION_FILE and the file is deleted on exit.
@@ -15,13 +15,13 @@ import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
-const gui = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const repo = path.dirname(gui);
-// npm runs scripts in gui/; INIT_CWD is where the user typed the command.
+const web = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const repo = path.dirname(path.dirname(web));
+// npm runs scripts in gui/web/; INIT_CWD is where the user typed the command.
 const userDir = process.env.INIT_CWD ?? process.cwd();
 
 function usage(code) {
-  console.log(`Usage: npm --prefix gui run bob -- [options]
+  console.log(`Usage: npm --prefix gui/web run bob -- [options]
 
   --config PATH   bob configuration (default: bob.toml in the current directory)
   --desktop       open the Tauri desktop app (tauri dev) instead of the browser
@@ -52,7 +52,7 @@ if (!bobBinary) {
   bobBinary = path.join(repo, "build", "bob-manager");
   console.error("bob-gui: building bob…");
   const build = spawnSync("go", ["build", "-o", bobBinary, "./cmd/container_manager"], {
-    cwd: repo,
+    cwd: path.join(repo, "launcher"),
     stdio: "inherit",
   });
   if (build.error || build.status !== 0) {
@@ -101,13 +101,17 @@ process.on("exit", removeSecret);
 
 function startGui() {
   const env = { ...process.env, BOB_CONNECTION_FILE: connectionFile };
-  const bin = (name) => path.join(gui, "node_modules", ".bin", name);
+  const bin = (name) => path.join(web, "node_modules", ".bin", name);
   if (options.desktop) {
     console.error("bob-gui: starting the desktop app (the first build compiles Rust and takes a while)");
-    guiProcess = spawn(bin("tauri"), ["dev"], { cwd: gui, env, stdio: "inherit" });
+    guiProcess = spawn(bin("tauri"), ["dev"], {
+      cwd: web,
+      env: { ...env, TAURI_APP_PATH: path.join(repo, "gui", "desktop") },
+      stdio: "inherit",
+    });
   } else {
     const args = options.open ? ["--open"] : [];
-    guiProcess = spawn(bin("vite"), args, { cwd: gui, env, stdio: "inherit" });
+    guiProcess = spawn(bin("vite"), args, { cwd: web, env, stdio: "inherit" });
   }
   guiProcess.on("exit", () => void stop(options.desktop ? "the desktop app closed" : "the GUI server exited"));
 }

@@ -12,8 +12,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+          go-version-file: launcher/go.mod
+          cache-dependency-path: launcher/go.sum
       - name: Check Go formatting
         shell: bash
         run: |
@@ -24,17 +24,18 @@ jobs:
             exit 1
           fi
       - name: Go vet
+        working-directory: launcher
         run: go vet ./...
       - uses: astral-sh/ruff-action@v4.1.0
         with:
           version: '0.16.6'
-          args: check --config ruff.toml container ci
+          args: check --config ruff.toml image ci
       - name: Check Python formatting
-        run: ruff format --check --diff --config ruff.toml container ci
+        run: ruff format --check --diff --config ruff.toml image ci
       - name: Validate workflows
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           actionlint
       - name: Check scripts
         run: |
-          shellcheck ci/*.sh container/entrypoint.sh
+          shellcheck ci/*.sh image/entrypoint.sh
