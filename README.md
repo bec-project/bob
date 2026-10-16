@@ -5,7 +5,7 @@ an outbound firewall limited to your configured model provider and remote MCP se
 
 ## Get started
 
-Requires Go 1.25+ and a running Docker or Podman engine. From the repository root:
+Requires Go 1.25+, Node 20+ and a running Docker or Podman engine. From the repository root:
 
 ```sh
 docker build -t localhost/bob ./image
@@ -14,21 +14,9 @@ cp deploy/bob.example.toml bob.toml
 
 Edit `bob.toml`: set `workspace.workdir` to your project directory outside this repository
 and `provider.base_url` to your OpenAI-compatible API. Set the model and token as needed.
-The example uses Docker and enables the browser UI.
+The example uses Docker.
 
-```sh
-go -C launcher build -o ../build/bob-manager ./cmd/container_manager
-build/bob-manager --config bob.toml
-```
-
-Open the returned URL. Treat the connection output as a credential. Ctrl-C removes the
-container; sessions remain in the home volume. For host-only access, set
-`container.bind_address = "127.0.0.1"` (the default accepts connections on all interfaces).
-
-With `--shared`, every program of a user shares one bob: the first one starts it, the others
-attach, and it stops after the last one is gone. See [shared mode](launcher/container_manager/README.md#shared-mode).
-
-For bob's own chat GUI instead of OpenCode's browser UI, start both together (Node 20+):
+bob starts from its GUI, in the browser or as a Tauri desktop app:
 
 ```sh
 npm --prefix gui/web install
@@ -36,8 +24,14 @@ npm --prefix gui/web run bob -- --config bob.toml
 ```
 
 It shows the container's sessions, the model's thinking, tool calls, time and token usage,
-and a thinking switch; a BEC plugin adds report cards and a device panel. It also runs as a
-Tauri desktop app. See the [GUI guide](gui/README.md).
+and a thinking switch; a BEC plugin adds report cards and a device panel. See the
+[GUI guide](gui/README.md).
+
+Each user has one bob. The first GUI starts it, every other GUI or program of that user joins
+the same bob and sees the same sessions, and bob stops 90 seconds after the last of them is
+gone; sessions remain in the home volume. See [how bob runs](launcher/container_manager/README.md#how-bob-runs).
+For host-only access, set `container.bind_address = "127.0.0.1"` (the default accepts
+connections on all interfaces).
 
 ## Repository layout
 

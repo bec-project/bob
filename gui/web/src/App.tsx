@@ -27,7 +27,7 @@ function useTheme() {
 }
 
 /**
- * Connect on start: to the launcher's bob; in the desktop app to the user's shared bob (joined,
+ * Connect on start: to the launcher's bob; in the desktop app to the user's bob (joined,
  * or started from the remembered bob.toml), or to the one running bob when no bob.toml is set;
  * else to the one used last.
  */
@@ -47,7 +47,7 @@ function useAutoConnect() {
         const binary = prefs.bobBinary || (await bobDefaults().catch(() => ({ binary: null }))).binary;
         if (cancelled) return;
         if (prefs.autoStartBob && prefs.bobConfig && binary) {
-          // bob --shared joins the bob this user runs, or starts it
+          // joins the bob this user runs, or starts it
           await startBob(binary, prefs.bobConfig);
         } else {
           const running = await listBobs().catch(() => []);

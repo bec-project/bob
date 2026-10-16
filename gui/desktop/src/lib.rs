@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{Manager, RunEvent, Url};
+use tauri::{Manager, Url};
 
 mod bob;
 
@@ -184,7 +184,8 @@ fn save_download(name: String, text: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    // Leases on bob are open connections: they end with the app, however it exits.
+    tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(bob::BobState::default())
         .invoke_handler(tauri::generate_handler![
@@ -197,31 +198,8 @@ pub fn run() {
             start_bob,
             stop_bob
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building the bob desktop app");
-    let mut stopping = false;
-    app.run(move |handle, event| {
-        // Quitting stops the bobs this app started: keep the process until they removed their
-        // containers, then exit for real.
-        if let RunEvent::ExitRequested { api, .. } = event {
-            let state = handle.state::<bob::BobState>();
-            if !stopping && bob::owns_any(&state) {
-                stopping = true;
-                api.prevent_exit();
-                for window in handle.webview_windows().values() {
-                    let _ = window.hide();
-                }
-                let handle = handle.clone();
-                std::thread::spawn(move || {
-                    let left = bob::stop(&handle.state::<bob::BobState>(), None);
-                    if !left.is_empty() {
-                        eprintln!("bob did not stop in time: {}", left.join(", "));
-                    }
-                    handle.exit(0);
-                });
-            }
-        }
-    });
+        .run(tauri::generate_context!())
+        .expect("error while running the bob desktop app");
 }
 
 #[derive(Serialize)]
@@ -247,7 +225,7 @@ async fn list_bobs(app: tauri::AppHandle) -> Result<Vec<bob::RunningBob>, String
         .map_err(|error| error.to_string())
 }
 
-/// Starts bob with a bob.toml; stops with the app. Returns bob's connection line.
+/// Joins the user's bob, starting it with a bob.toml when none runs. Returns bob's connection.
 #[tauri::command]
 async fn start_bob(
     app: tauri::AppHandle,
@@ -261,14 +239,10 @@ async fn start_bob(
     .map_err(|error| error.to_string())?
 }
 
-/// Stops a bob this app started (by container name), or all of them.
+/// Ends this app's lease on a bob (by container name), or all of them.
 #[tauri::command]
-async fn stop_bob(app: tauri::AppHandle, container: Option<String>) -> Result<Vec<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        bob::stop(&app.state::<bob::BobState>(), container.as_deref())
-    })
-    .await
-    .map_err(|error| error.to_string())
+fn stop_bob(app: tauri::AppHandle, container: Option<String>) {
+    bob::stop(&app.state::<bob::BobState>(), container.as_deref());
 }
 
 #[cfg(test)]

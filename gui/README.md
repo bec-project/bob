@@ -1,8 +1,7 @@
 # bob GUI
 
-A chat UI for the OpenCode server that bob runs in its container. It replaces OpenCode's own
-browser UI (`container.web = true`) and talks to the same API, so bob can keep its default
-headless `serve` mode.
+A chat UI for the OpenCode server that bob runs in its container, and the way bob starts: the
+first GUI a user opens starts their bob, and later ones join it.
 
 - **Sessions** from the container, grouped by day, with search, rename and delete.
 - **Streaming answers** with the model's thinking in a collapsible block and a live timer.
@@ -34,18 +33,16 @@ npm --prefix gui/web install
 npm --prefix gui/web run bob -- --config bob.toml
 ```
 
-This builds bob, joins your shared bob (starting it when none runs), waits for its connection
-line and opens the GUI on <http://127.0.0.1:5173>, already connected. Ctrl-C stops the GUI and
-ends its hold on bob; bob stops 90 seconds after the last program that uses it is gone. The connection holds OpenCode's password; the launcher passes it to the GUI through
-a private temporary file (`BOB_CONNECTION_FILE`) that it deletes on exit. The dev server, which
-listens on 127.0.0.1 only, hands that connection to its page, and so to any local process that
-asks for it: on a host shared with other users, start bob yourself and paste the connection
-into a GUI started without `BOB_CONNECTION_FILE` instead.
+This builds bob, joins your bob (starting it when none runs), waits until it is up and opens
+the GUI on <http://127.0.0.1:5173>, already connected. Ctrl-C stops the GUI and ends its hold on
+bob; bob stops 90 seconds after the last program that uses it is gone. The connection holds
+OpenCode's password; the launcher passes it to the GUI through a private temporary file
+(`BOB_CONNECTION_FILE`) that it deletes on exit. The dev server, which listens on 127.0.0.1
+only, hands that connection to its page, and so to any local process that asks for it: on a
+host shared with other users, use the desktop app instead.
 
-To connect to a bob you started yourself, run `npm --prefix gui/web run dev` and paste the JSON
-line bob printed into the connect screen.
-
-`container.web` can stay `false`: the GUI only needs the API that `serve` provides.
+To connect to a bob running elsewhere, run `npm --prefix gui/web run dev` and paste its
+connection (URL and password) into the connect screen.
 
 ### Desktop app
 
@@ -58,7 +55,7 @@ npm --prefix gui/web run bob -- --config bob.toml --desktop   # bob + the app, i
 npm --prefix gui/web run tauri build                          # a bundle in gui/desktop/target/release/bundle
 ```
 
-The desktop app uses your shared bob (see bob's [shared mode](../launcher/container_manager/README.md#shared-mode)):
+The desktop app uses your bob (see [how bob runs](../launcher/container_manager/README.md#how-bob-runs)):
 when it opens, it joins the bob you already run, or starts it with the remembered bob.toml when
 none runs, unless *Do this when the app opens* is off. It holds bob until you quit it or choose
 *Leave this bob* in Settings; bob stops 90 seconds after the last program that uses it (this
@@ -71,8 +68,7 @@ or Podman; connecting to one of those does not hold it. To read such a container
 password the app uses `docker inspect`, which only someone who can already control the engine can
 do. Settings → *Switch bob…* goes back to that screen.
 
-`npm run bob` joins the shared bob the same way, so the browser GUI and the desktop app use one
-bob.
+`npm run bob` joins your bob the same way, so the browser GUI and the desktop app use one bob.
 
 ## Thinking
 

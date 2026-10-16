@@ -144,7 +144,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </div>
           {owned && (
             <div className="desc" style={{ marginTop: 8 }}>
-              This app holds the shared bob ({owned}); quitting or leaving ends its hold, and bob stops once no app
+              This app holds your bob ({owned}); quitting or leaving ends its hold, and bob stops once no app
               holds it.
             </div>
           )}

@@ -1,18 +1,16 @@
 package main
 
-// Shared mode: one bob per user, kept while any consumer holds a lease.
+// One bob per user, started by the user's first GUI and kept while any client holds a lease.
 //
-// `--shared` makes this process a consumer. It connects to the user's broker socket, starting
-// a broker first when none answers, prints the broker's connection line like the classic mode
-// does, and holds its lease until it is interrupted, its parent process exits, or the broker
-// goes away. The broker (`--broker`, started detached by the first consumer) runs one Manager.
-// It replies to every consumer with the same connection and tears bob down once the last
-// lease has been gone for the linger time.
-//
-// Protocol on the socket, one JSON object per line: the consumer sends
-// {"consumer": "<name>", "pid": <pid>, "config": "<absolute bob.toml>"}; the broker answers
+// The broker (`--broker`) runs one Manager for the user. A client finds it with
+// `bob-manager [--config bob.toml]`, which makes sure the broker runs (starting a detached one
+// when its socket does not answer) and prints {"socket": "<path>"}. The client connects to that
+// socket and sends one JSON line, {"consumer": "<name>", "pid": <pid>, "config": "<absolute
+// bob.toml>"}. The broker starts bob for the first client and answers every client with
 // {"connection": {...}, "config": "<its bob.toml>", "consumers": <n>} or {"error": "<text>"}
-// once bob is up. The lease lasts as long as the consumer keeps the connection open.
+// once bob is up. A client holds its lease for as long as it keeps the connection open, so a
+// client that crashes ends its lease with it. The linger time after the last lease ends, the
+// broker stops bob and exits.
 
 import (
 	"bufio"
@@ -37,15 +35,15 @@ const (
 	brokerSocket = "broker.sock"
 	brokerLock   = "broker.lock"
 	brokerLog    = "broker.log"
-	// defaultLinger keeps bob through a consumer restart, such as reopening the GUI.
+	// defaultLinger keeps bob through a client restart, such as reopening the GUI.
 	defaultLinger = 90 * time.Second
-	// firstConsumerWait bounds a broker whose starting consumer never connected.
-	firstConsumerWait = 30 * time.Second
-	// consumerDeadline covers bob's own 90 s startup limit and a broker that is still
-	// removing the previous container.
-	consumerDeadline = 3 * time.Minute
-	helloTimeout     = 10 * time.Second
+	// clientDeadline covers a broker that is still removing the previous container.
+	clientDeadline = 3 * time.Minute
+	helloTimeout   = 10 * time.Second
 )
+
+// firstClientWait bounds a broker whose starting client never connected; tests shorten it.
+var firstClientWait = 30 * time.Second
 
 // lifecycle is the part of containermanager.Manager the broker uses.
 type lifecycle interface {
@@ -107,7 +105,7 @@ func maxSocketPath() int {
 	return 103
 }
 
-// broker serves one bob to every consumer that connects, and stops it after the last one.
+// broker serves one bob to every client that connects, and stops it after the last one.
 type broker struct {
 	manager lifecycle
 	options containermanager.Options
@@ -115,11 +113,13 @@ type broker struct {
 	linger  time.Duration
 	log     io.Writer
 
+	startCtx   context.Context
 	ready      chan struct{} // closed when Start returned
 	connection containermanager.Connection
 	startErr   error
 
 	mu        sync.Mutex
+	started   bool // Start was called, by the first client
 	consumers int
 	open      map[net.Conn]struct{}
 	idle      *time.Timer
@@ -132,7 +132,7 @@ func newBroker(manager lifecycle, options containermanager.Options, config strin
 		manager: manager, options: options, config: config, linger: linger, log: log,
 		ready: make(chan struct{}), open: map[net.Conn]struct{}{}, stop: make(chan struct{}),
 	}
-	b.idle = time.AfterFunc(max(firstConsumerWait, linger), b.shutdownIfIdle)
+	b.idle = time.AfterFunc(max(firstClientWait, linger), b.shutdownIfIdle)
 	return b
 }
 
@@ -145,33 +145,37 @@ func (b *broker) requestStop() {
 }
 
 func (b *broker) shutdownIfIdle() {
-	// Under the lock, so a consumer either joins first or sees the broker stopping.
+	// Under the lock, so a client either joins first or sees the broker stopping.
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.consumers == 0 {
-		b.logf("no consumer left; stopping bob")
+		b.logf("no client left; stopping")
 		b.requestStop()
 	}
 }
 
-// serve runs bob and the accept loop until the last lease lapses or ctx ends, then stops bob.
+// start runs bob for the first client; every client waits for ready.
+func (b *broker) start() {
+	b.logf("starting bob with %s", b.config)
+	b.connection, b.startErr = b.manager.Start(b.startCtx, b.options)
+	if b.startErr != nil {
+		b.logf("bob did not start: %v", b.startErr)
+	} else {
+		b.logf("bob is up as %s at %s", b.connection.Container, b.connection.URL)
+	}
+	close(b.ready)
+	if b.startErr != nil {
+		// clients already waiting get the error; then there is nothing to serve
+		time.AfterFunc(time.Second, b.requestStop)
+	}
+}
+
+// serve runs the accept loop until the last lease lapses or ctx ends, then stops bob if a
+// client made the broker start it.
 func (b *broker) serve(ctx context.Context, listener net.Listener) error {
 	startCtx, cancelStart := context.WithCancel(ctx)
 	defer cancelStart()
-	go func() {
-		b.logf("starting bob with %s", b.config)
-		b.connection, b.startErr = b.manager.Start(startCtx, b.options)
-		if b.startErr != nil {
-			b.logf("bob did not start: %v", b.startErr)
-		} else {
-			b.logf("bob is up as %s at %s", b.connection.Container, b.connection.URL)
-		}
-		close(b.ready)
-		if b.startErr != nil {
-			// consumers already waiting get the error; then there is nothing to serve
-			time.AfterFunc(time.Second, b.requestStop)
-		}
-	}()
+	b.startCtx = startCtx
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -184,7 +188,7 @@ func (b *broker) serve(ctx context.Context, listener net.Listener) error {
 	select {
 	case <-b.stop:
 	case <-ctx.Done():
-		b.logf("interrupted; stopping bob")
+		b.logf("interrupted; stopping")
 		b.requestStop()
 	}
 	b.idle.Stop()
@@ -193,7 +197,12 @@ func (b *broker) serve(ctx context.Context, listener net.Listener) error {
 	for conn := range b.open {
 		_ = conn.Close()
 	}
+	// A client that has not counted itself by now sees the stop and starts nothing.
+	started := b.started
 	b.mu.Unlock()
+	if !started {
+		return nil
+	}
 	// Calls to one Manager are serialized: wait for Start before Stop.
 	cancelStart()
 	<-b.ready
@@ -213,7 +222,7 @@ func (b *broker) handle(conn net.Conn) {
 	line, err := reader.ReadBytes('\n')
 	var greeting hello
 	if err != nil || json.Unmarshal(line, &greeting) != nil {
-		return
+		return // `bob-manager` checking that the broker answers, or not a client
 	}
 	_ = conn.SetReadDeadline(time.Time{})
 
@@ -228,9 +237,13 @@ func (b *broker) handle(conn net.Conn) {
 	b.consumers++
 	b.open[conn] = struct{}{}
 	b.idle.Stop()
+	if !b.started {
+		b.started = true
+		go b.start()
+	}
 	count := b.consumers
 	b.mu.Unlock()
-	b.logf("consumer %q (pid %d) joined; %d holding bob", greeting.Consumer, greeting.PID, count)
+	b.logf("client %q (pid %d) joined; %d holding bob", greeting.Consumer, greeting.PID, count)
 
 	defer func() {
 		b.mu.Lock()
@@ -241,7 +254,7 @@ func (b *broker) handle(conn net.Conn) {
 			b.idle.Reset(b.linger)
 		}
 		b.mu.Unlock()
-		b.logf("consumer %q (pid %d) left; %d holding bob", greeting.Consumer, greeting.PID, left)
+		b.logf("client %q (pid %d) left; %d holding bob", greeting.Consumer, greeting.PID, left)
 	}()
 
 	select {
@@ -264,7 +277,7 @@ func (b *broker) handle(conn net.Conn) {
 	if err := json.NewEncoder(conn).Encode(reply); err != nil || reply.Error != "" {
 		return
 	}
-	// The lease lasts until the consumer closes the connection (or its process ends).
+	// The lease lasts until the client closes the connection (or its process ends).
 	_, _ = io.Copy(io.Discard, reader)
 }
 
@@ -312,144 +325,58 @@ func spawnBroker(directory, config string, linger time.Duration) error {
 	defer logFile.Close()
 	cmd := exec.Command(executable, "--broker", "--config", config, "--linger", linger.String())
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, logFile, logFile
-	// Its own session: a terminal's Ctrl-C for one consumer must not reach the shared bob.
+	// Its own session: closing the GUI or terminal that asked for it must not reach the broker.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	go func() { _ = cmd.Wait() }() // reap it if it exits while this consumer runs
+	go func() { _ = cmd.Wait() }() // reap it if it exits while this process waits
 	return nil
 }
 
-// dialBroker connects to the user's broker, starting one when none answers.
-func dialBroker(ctx context.Context, directory, config string, linger time.Duration) (net.Conn, error) {
+// ensureBroker returns the user's broker socket once a broker answers on it, starting one when
+// none does.
+func ensureBroker(ctx context.Context, directory, config string, linger time.Duration) (string, error) {
 	socket := filepath.Join(directory, brokerSocket)
-	deadline := time.Now().Add(consumerDeadline)
+	deadline := time.Now().Add(clientDeadline)
 	var lastSpawn time.Time
 	for {
 		conn, err := net.DialTimeout("unix", socket, 2*time.Second)
 		if err == nil {
-			return conn, nil
+			_ = conn.Close() // no hello: the broker counts no lease for this check
+			return socket, nil
 		}
 		// A broker that is still stopping the previous bob holds the lock, so a new one exits
 		// at once: try again until the old one is done.
 		if time.Since(lastSpawn) > 3*time.Second {
 			if err := spawnBroker(directory, config, linger); err != nil {
-				return nil, fmt.Errorf("start the bob broker: %w", err)
+				return "", fmt.Errorf("start the bob broker: %w", err)
 			}
 			lastSpawn = time.Now()
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("no bob broker answered on %s; see %s", socket, filepath.Join(directory, brokerLog))
+			return "", fmt.Errorf("no bob broker answered on %s; see %s", socket, filepath.Join(directory, brokerLog))
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return "", ctx.Err()
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
 }
 
-// lease asks the broker for bob and returns the open connection that holds the lease.
-func lease(ctx context.Context, conn net.Conn, consumer, config string) (brokerReply, *bufio.Reader, error) {
-	greeting := hello{Consumer: consumer, PID: os.Getpid(), Config: config}
-	if err := json.NewEncoder(conn).Encode(greeting); err != nil {
-		return brokerReply{}, nil, err
-	}
-	reader := bufio.NewReader(conn)
-	replies := make(chan error, 1)
-	var reply brokerReply
-	go func() {
-		line, err := reader.ReadBytes('\n')
-		if err == nil {
-			err = json.Unmarshal(line, &reply)
-		}
-		replies <- err
-	}()
-	select {
-	case err := <-replies:
-		if err != nil {
-			return reply, nil, fmt.Errorf("the bob broker closed the connection: %w", err)
-		}
-	case <-ctx.Done():
-		return reply, nil, ctx.Err()
-	}
-	if reply.Error != "" {
-		return reply, nil, errors.New(reply.Error)
-	}
-	if reply.Connection == nil {
-		return reply, nil, errors.New("the bob broker sent no connection")
-	}
-	return reply, reader, nil
-}
-
-// whileParentLives ends ctx when the process that started this one exits: a consumer that
-// crashed must not keep bob, nor wait for it. Orphans are adopted by init (or a subreaper), which
-// changes the parent; a process started by init itself has no parent to watch.
-func whileParentLives(ctx context.Context, interval time.Duration) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(ctx)
-	parent := os.Getppid()
-	if parent <= 1 {
-		return ctx, cancel
-	}
-	go func() {
-		tick := time.NewTicker(interval)
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				if os.Getppid() != parent {
-					cancel()
-					return
-				}
-			}
-		}
-	}()
-	return ctx, cancel
-}
-
-// runShared prints the shared bob's connection and holds a lease until interrupted, until the
-// parent process exits, or until bob goes away.
-func runShared(ctx context.Context, config, consumer string, linger time.Duration, out io.Writer) error {
-	ctx, cancel := whileParentLives(ctx, time.Second)
-	defer cancel()
+// runLocate makes sure the user's broker runs and prints its socket for a client.
+func runLocate(ctx context.Context, config string, linger time.Duration, out io.Writer) error {
 	directory, err := runtimeDir()
 	if err != nil {
 		return err
 	}
-	conn, err := dialBroker(ctx, directory, config, linger)
+	socket, err := ensureBroker(ctx, directory, config, linger)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil
 		}
 		return err
 	}
-	defer conn.Close()
-	reply, reader, err := lease(ctx, conn, consumer, config)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil
-		}
-		return err
-	}
-	if reply.Config != config {
-		fmt.Fprintf(os.Stderr, "bob already runs for this user with %s; using it instead of %s\n", reply.Config, config)
-	}
-	if err := json.NewEncoder(out).Encode(reply.Connection); err != nil {
-		return err
-	}
-
-	gone := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(io.Discard, reader)
-		close(gone)
-	}()
-	select {
-	case <-ctx.Done():
-		return nil
-	case <-gone:
-		return errors.New("bob stopped: the broker closed the connection")
-	}
+	return json.NewEncoder(out).Encode(map[string]string{"socket": socket})
 }

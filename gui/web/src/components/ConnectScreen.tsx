@@ -5,7 +5,7 @@ import { useStore } from "../state/store";
 import { relativeTime } from "./hooks";
 import { IconLogo, IconRefresh } from "./Icons";
 
-/** Desktop app: join (or start) the user's shared bob, or connect to another running bob. */
+/** Desktop app: join (or start) the user's bob, or connect to another running bob. */
 function DesktopBobs() {
   const connect = useStore((s) => s.connect);
   const startBob = useStore((s) => s.startBob);
@@ -192,7 +192,7 @@ export function ConnectScreen() {
             )}
             <div className="connect-actions">
               <span className="muted" style={{ fontSize: 12.5 }}>
-                Paste the JSON line bob printed, or a URL and its password.
+                Paste a connection (JSON with url and password), or a URL and its password.
               </span>
               <button className="btn primary" type="submit" disabled={!ready || phase === "connecting"}>
                 {phase === "connecting" ? "Connecting…" : "Connect"}
