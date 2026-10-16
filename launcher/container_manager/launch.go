@@ -73,23 +73,12 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 		args = append(args, "--group-add", group)
 	}
 
-	// Workspace mounts and published ports.
+	// Workspace mounts, the OpenCode configuration directory and published ports.
 	for _, mount := range options.mounts {
-		value := mount.path + ":" + mount.path
-		var flags []string
-		if mount.readOnly {
-			flags = append(flags, "ro")
-		}
-		switch options.MountLabel {
-		case "shared":
-			flags = append(flags, "z")
-		case "private":
-			flags = append(flags, "Z")
-		}
-		if len(flags) > 0 {
-			value += ":" + strings.Join(flags, ",")
-		}
-		args = append(args, "--volume", value)
+		args = append(args, "--volume", volumeValue(mount.path, mount.path, mount.readOnly, options.MountLabel))
+	}
+	if options.openCodeConfigDir != "" {
+		args = append(args, "--volume", volumeValue(options.openCodeConfigDir, openCodeConfigTarget, true, options.MountLabel))
 	}
 	bindAddress := options.BindAddress
 	if strings.Contains(bindAddress, ":") {
@@ -109,6 +98,25 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 	}
 	args = append(args, options.Image, "serve", "--hostname", "0.0.0.0", "--port", "4096")
 	return args, environment, nil
+}
+
+// volumeValue formats a --volume bind mount with its read-only and SELinux label flags.
+func volumeValue(source, target string, readOnly bool, label string) string {
+	value := source + ":" + target
+	var flags []string
+	if readOnly {
+		flags = append(flags, "ro")
+	}
+	switch label {
+	case "shared":
+		flags = append(flags, "z")
+	case "private":
+		flags = append(flags, "Z")
+	}
+	if len(flags) > 0 {
+		value += ":" + strings.Join(flags, ",")
+	}
+	return value
 }
 
 // The temporary ownership container uses the same home volume as the agent.
@@ -175,6 +183,9 @@ func getLaunchEnvironment(options resolvedOptions) ([]string, error) {
 			return nil, err
 		}
 		environment = append(environment, "OPENCODE_CONFIG_CONTENT="+string(encoded))
+	}
+	if options.openCodeConfigDir != "" {
+		environment = append(environment, "OPENCODE_CONFIG_DIR="+openCodeConfigTarget)
 	}
 	return environment, nil
 }

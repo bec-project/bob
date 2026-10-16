@@ -234,6 +234,29 @@ func TestMountLabelConfig(t *testing.T) {
 	}
 }
 
+func TestOpenCodeConfigDirConfig(t *testing.T) {
+	base := "[workspace]\nworkdir = \"/repo\"\n[provider]\nbase_url = \"https://example.invalid/v1\"\n"
+	path := writeConfig(t, base+"[opencode]\nconfig_dir = \"profiles\"\n")
+	input, err := loadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(filepath.Dir(path), "profiles"); input.OpenCodeConfigDir != want {
+		t.Fatalf("relative config_dir resolved to %q, want %q", input.OpenCodeConfigDir, want)
+	}
+	input, err = loadConfig(writeConfig(t, base+"[opencode]\nconfig_dir = \"/srv/bob/opencode\"\n"))
+	if err != nil || input.OpenCodeConfigDir != "/srv/bob/opencode" {
+		t.Fatalf("absolute config_dir changed: %q, %v", input.OpenCodeConfigDir, err)
+	}
+	input, err = loadConfig(writeConfig(t, base))
+	if err != nil || input.OpenCodeConfigDir != "" {
+		t.Fatalf("config_dir set without configuration: %q, %v", input.OpenCodeConfigDir, err)
+	}
+	if _, err := loadConfig(writeConfig(t, base+"[opencode]\nconfig_directory = \"profiles\"\n")); err == nil {
+		t.Fatal("accepted an unknown opencode setting")
+	}
+}
+
 func TestNamedMCPConfig(t *testing.T) {
 	path := writeConfig(t, `[workspace]
 workdir = "/repo"

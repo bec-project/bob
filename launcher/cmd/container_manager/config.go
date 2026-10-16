@@ -41,6 +41,9 @@ type config struct {
 		// Decode only to explain the removed setting; never forward or execute it.
 		UnsupportedCommand any `toml:"command"`
 	} `toml:"mcp"`
+	OpenCode struct {
+		ConfigDir string `toml:"config_dir"`
+	} `toml:"opencode"`
 }
 
 func loadConfig(path string) (containermanager.Options, error) {
@@ -93,6 +96,7 @@ func loadConfig(path string) (containermanager.Options, error) {
 	if settings.Provider.Token != nil {
 		input.APIKey = *settings.Provider.Token
 	}
+	input.OpenCodeConfigDir = settings.OpenCode.ConfigDir
 	if input.BaseURL == "" {
 		return input, errors.New("config requires provider.base_url")
 	}
@@ -113,6 +117,9 @@ func loadConfig(path string) (containermanager.Options, error) {
 				directories[i] = filepath.Join(filepath.Dir(path), directory)
 			}
 		}
+	}
+	if input.OpenCodeConfigDir != "" && !filepath.IsAbs(input.OpenCodeConfigDir) {
+		input.OpenCodeConfigDir = filepath.Join(filepath.Dir(path), input.OpenCodeConfigDir)
 	}
 	return input, nil
 }
