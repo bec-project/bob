@@ -41,7 +41,7 @@ connections on all interfaces).
 | `image/` | The OpenCode container image: Dockerfile, firewall bootstrap, entrypoint, OpenCode configuration |
 | `gui/web/` | The chat GUI (React, Vite) and its launcher script |
 | `gui/desktop/` | The Tauri desktop shell around the same GUI |
-| `deploy/` | Deployment configuration: the annotated `bob.example.toml` |
+| `deploy/` | Deployment configuration: the annotated `bob.example.toml` and example OpenCode agents (`opencode/`) |
 | `ci/`, `.github/` | Release tooling and CI workflows |
 
 ## Documentation
