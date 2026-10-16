@@ -24,7 +24,7 @@ jobs:
       - name: Test firewall bootstrap
         run: |
           python -m pip install coverage
-          python -m coverage run --branch --source=network -m unittest discover -s container -p network_test.py -v
+          python -m coverage run --branch --source=network -m unittest discover -s image -p network_test.py -v
           python -m coverage report
           python -m coverage xml -o coverage.xml
       - name: Test release delivery retries

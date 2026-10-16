@@ -47,8 +47,13 @@ jobs:
     if: needs.check_pr_status.outputs.branch-pr == ''
     uses: ./.github/workflows/binaries.yml
 
+  gui:
+    needs: [check_pr_status, formatter]
+    if: needs.check_pr_status.outputs.branch-pr == ''
+    uses: ./.github/workflows/gui.yml
+
   release:
-    needs: [formatter, unit-test, network-test, container-test, binaries]
+    needs: [formatter, unit-test, network-test, container-test, binaries, gui]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write

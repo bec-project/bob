@@ -4,13 +4,14 @@
 follow existing local patterns, and preserve lifecycle cleanup and the container's isolation policy.
 
 This file is an agent-oriented operating manual. Human-facing documentation lives in
-[`README.md`](README.md), [`container_manager/README.md`](container_manager/README.md), and
-[`container/README.md`](container/README.md). Configuration examples live in `bob.example.toml`.
+[`README.md`](README.md), [`launcher/container_manager/README.md`](launcher/container_manager/README.md),
+[`image/README.md`](image/README.md) and [`gui/README.md`](gui/README.md). Configuration examples live in
+`deploy/bob.example.toml`.
 
 ## Core Rules
 
-- Keep container lifecycle and runtime arguments in `container_manager`; keep CLI concerns in
-  `cmd/container_manager`.
+- Keep container lifecycle and runtime arguments in `launcher/container_manager`; keep CLI concerns in
+  `launcher/cmd/container_manager`.
 - Calls to one `Manager` must be serialized. Preserve cleanup state until ownership and removal
   are settled; an empty lookup does not settle an uncertain create request.
 - Track agent containers and preparation helpers by ownership labels. Never remove an unrelated
@@ -31,27 +32,33 @@ This file is an agent-oriented operating manual. Human-facing documentation live
 
 Read the affected implementation and its tests. For unfamiliar areas, start here:
 
-- `container_manager/options.go` — defaults, validation, mount resolution, and ownership identity
-- `container_manager/launch.go` — engine arguments, environment, and filesystem identity mapping
-- `container_manager/manager.go` — startup, helper lifecycle, cleanup, and readiness
-- `container_manager/runtime.go` — subprocess execution, cancellation, and failure classification
-- `cmd/container_manager/config.go` — TOML loading and relative paths
-- `cmd/container_manager/main.go` — arguments, signals, and connection output
-- `container/network.py` and `container/entrypoint.sh` — firewall bootstrap and privilege dropping
-- `container/Dockerfile` and `container/opencode.json` — image and OpenCode configuration
-- `container_manager/lifecycle_test.go` — fake engine and cleanup regression tests
+- `launcher/container_manager/options.go` — defaults, validation, mount resolution, and ownership identity
+- `launcher/container_manager/launch.go` — engine arguments, environment, and filesystem identity mapping
+- `launcher/container_manager/manager.go` — startup, helper lifecycle, cleanup, and readiness
+- `launcher/container_manager/runtime.go` — subprocess execution, cancellation, and failure classification
+- `launcher/cmd/container_manager/config.go` — TOML loading and relative paths
+- `launcher/cmd/container_manager/main.go` — arguments, signals, and the broker-or-locate entry point
+- `launcher/cmd/container_manager/broker.go` — the per-user broker that runs one Manager for all of a
+  user's clients, and the locate step that starts it
+- `image/network.py` and `image/entrypoint.sh` — firewall bootstrap and privilege dropping
+- `image/Dockerfile` and `image/opencode.json` — image and OpenCode configuration
+- `launcher/container_manager/lifecycle_test.go` — fake engine and cleanup regression tests
 
 ## Repo Layout
 
-- `cmd/container_manager/` — Go executable and CLI/configuration tests
-- `container_manager/` — reusable Go package, named `containermanager`, and its tests
-- `container/` — image build context, Python firewall bootstrap, shell entrypoint, and network tests
-- `bob.example.toml` — annotated public configuration example
+- `launcher/` — the Go module (`go.mod`); run Go commands from here
+  - `launcher/cmd/container_manager/` — Go executable and CLI/configuration tests
+  - `launcher/container_manager/` — reusable Go package, named `containermanager`, and its tests
+- `image/` — image build context, Python firewall bootstrap, shell entrypoint, and network tests
+- `gui/web/` — chat UI for the OpenCode API (React, Vite, TypeScript), its plugins (BEC) and the
+  `bob-gui` launcher script
+- `gui/desktop/` — the Tauri desktop shell around the same UI
+- `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
 - `ci/` — release binary packaging
 
-Treat `go.mod` as the source of truth for Go dependencies and the minimum Go version.
+Treat `launcher/go.mod` as the source of truth for Go dependencies and the minimum Go version.
 Treat `ruff.toml` as the source of truth for Python linting and formatting settings.
 
 ## Local Overlay
@@ -65,15 +72,25 @@ guidance here. Keep it local and untracked; do not copy its contents into commit
 If you change:
 
 - `options.go` or `config.go`: test validation, defaults, token precedence, and relative paths;
-  update `bob.example.toml` and the configuration table when public settings change.
+  update `deploy/bob.example.toml` and the configuration table when public settings change.
 - `launch.go`: check Docker and Podman argument generation, identities, security options, mount
   flags, and helper commands. Preserve values without shell interpolation.
+- `broker.go`: test leases (two clients, one start, none before the first client), teardown after
+  the last client and the linger time, a killed client ending its lease, start failures reaching
+  every client, cancellation before Stop, and the one-broker lock; run the broker tests repeatedly
+  with `-race -count=5`. GUIs implement the client side (`gui/desktop/src/bob.rs`,
+  `gui/web/scripts/bob-gui.mjs`): keep them in step with the protocol.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
   retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
 - `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,
   DNS pinning, loopback handling, and failures before agent execution.
 - `entrypoint.sh`, `Dockerfile`, or `opencode.json`: rebuild the image before real-engine
   validation. Check bootstrap identity, capability dropping, provider configuration, and MCP setup.
+- `gui/`: run `npm run typecheck`, `npm test` and `npx vite build` in `gui/web/`, and
+  `cargo fmt --check && cargo test` in `gui/desktop/` for Rust changes. Keep the
+  `@opencode-ai/sdk` version equal to the OpenCode version the image pins. The dev server's
+  `/__bob/*` routes and the Tauri commands must keep relaying only to loopback targets and must
+  not expose the connection file to other origins.
 - Documentation only: verify paths, commands, examples, and stated runtime limitations. A broad
   test run is unnecessary when executable behavior is unchanged.
 - CI or release tooling: run actionlint and the affected checks. Keep publishing in the trusted
@@ -108,19 +125,20 @@ guarantees. Host-control sockets remain dangerous even through read-only mounts.
 
 Run the smallest relevant test target first. For lifecycle, shared configuration, or isolation
 changes, run the affected suites before finishing. Keep tests independent of execution order.
+Go commands run in `launcher/`; the firewall tests run from the repository root.
 
 ```bash
-go test -race ./container_manager -run TestCancelledCreate
-go test -race ./cmd/container_manager
-python3 -m unittest discover -s container -p network_test.py
+(cd launcher && go test -race ./container_manager -run TestCancelledCreate)
+(cd launcher && go test -race ./cmd/container_manager)
+python3 -m unittest discover -s image -p network_test.py
 ```
 
-Full Go checks:
+Full Go checks, in `launcher/`:
 
 ```bash
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
-go build -o build/bob-manager ./cmd/container_manager
+go build -o ../build/bob-manager ./cmd/container_manager
 ```
 
 Unit tests should use temporary directories, fake engines, and synthetic endpoints. Reuse the
@@ -130,8 +148,8 @@ a real provider, production credentials, or hardware for tests.
 Real-engine integration requires Docker and a freshly built image:
 
 ```bash
-docker build -t localhost/bob ./container
-BOB_CONTAINER_TEST=1 go test -race ./...
+docker build -t localhost/bob ./image
+(cd launcher && BOB_CONTAINER_TEST=1 go test -race ./...)
 ```
 
 Integration tests must clean up only their own containers and test volumes. Ordinary manager cleanup
@@ -148,8 +166,8 @@ platform control flow, cross-compilation, and actual deployment checks.
 - Avoid formatting and import-order churn in untouched files.
 
 ```bash
-ruff format container/network.py container/network_test.py
-ruff check container/network.py container/network_test.py
+ruff format image/network.py image/network_test.py
+ruff check image/network.py image/network_test.py
 ```
 
 ## Development Environment
@@ -161,12 +179,13 @@ and environment activation instructions out of committed repository guidance.
 If the default Go cache is unavailable in a sandbox, set `GOCACHE` to a writable temporary
 directory for that command. Do not change global tooling configuration to run one task.
 
-For a local launch, build the image, copy `bob.example.toml` to the ignored `bob.toml`, and
+For a local launch, build the image, copy `deploy/bob.example.toml` to the ignored `bob.toml`, and
 configure
-the workspace, engine, provider URL, and any token before running:
+the workspace, engine, provider URL, and any token before starting bob from its GUI:
 
 ```bash
-go run ./cmd/container_manager --config bob.toml
+npm --prefix gui/web install
+npm --prefix gui/web run bob -- --config bob.toml
 ```
 
 Keep the host launcher and other host-executed code outside the agent's writable workspace.

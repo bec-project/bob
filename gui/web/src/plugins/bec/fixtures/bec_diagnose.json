@@ -1,0 +1,28 @@
+{
+ "ok": true,
+ "summary": "No problems found for the beamline.",
+ "findings": [],
+ "data": {
+  "window_s": 3600.0,
+  "services": {
+   "BuiltinActors/9609a179": "RUNNING",
+   "DAPServer/LmfitSer": "RUNNING",
+   "DeviceServer": "RUNNING",
+   "FileWriterManager": "RUNNING",
+   "ScanBundler": "RUNNING",
+   "ScanServer": "RUNNING",
+   "SciHub": "RUNNING"
+  },
+  "devices": {
+   "configured": 216,
+   "disabled": 0
+  },
+  "queues": {
+   "primary": {
+    "status": "RUNNING",
+    "pending": 0
+   }
+  }
+ },
+ "truncated": false
+}

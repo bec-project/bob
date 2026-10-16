@@ -1,0 +1,77 @@
+[container]
+# Container engine: "docker" or "podman". Default: "podman".
+runtime = "docker"
+# Image tag to launch; build this image from ./image first.
+# Default: "localhost/bob".
+image = "localhost/bob"
+# Named volume that preserves OpenCode's home, configuration, and sessions.
+# Default: "bob-<user name>-home", one per user, so every GUI of a user sees the same sessions
+# and users of one engine never share them. Set it to keep an older volume, such as "bob-cli-home".
+# home_volume = "bob-cli-home"
+# Optional container name. Omit to generate a unique name for each launch.
+# name = "bob"
+# OpenCode API bind address. Default: "0.0.0.0" (reachable from other hosts).
+# Use "127.0.0.1" for host-only access. The API still requires its generated password.
+bind_address = "0.0.0.0"
+
+[workspace]
+# Required working directory, mounted writable at the same absolute path inside
+# the container. OpenCode starts here, independently of the additional mounts.
+workdir = "."
+# Additional writable directories. Default: [].
+# Example: rw = ["../output"].
+rw = []
+# Additional read-only directories. Default: [].
+# Example: ro = ["../notes", "/absolute/path/to/data"].
+ro = []
+# On SELinux hosts, explicitly opt into labeling workspace mounts:
+# mount_label = "shared"   # :z, allows multiple containers to use the directories.
+# mount_label = "private"  # :Z, grants access to this container only.
+# Omit for pre-labeled mounts. Relabeling changes host files; do not use it for
+# system directories or a whole home directory used by other confined services.
+# Relative paths resolve beside this file; "." means this config's directory.
+# Host and container mount paths are identical. Read-only directories must not
+# overlap workdir or any RW directory, including through symlinks.
+
+[provider]
+# Model provider's API URL, including its API path. Must be reachable from the container.
+# Required, with no default. The firewall allows this server's IPs and TCP port.
+# URL path restrictions must be enforced by the server.
+# Replace this placeholder with your provider or gateway URL.
+base_url = "https://ai-provider.example.com/api/"
+# Model ID offered by the provider. Default: "Qwen3.8-27B".
+model = "Qwen3.8-27B"
+# Optional provider/gateway token. Overrides API_KEY, including an explicit empty token.
+# token = "your-user-token"
+# Optional model context window in tokens, passed to OpenCode as the model's limit.
+# OpenCode uses it to show how full the context is and to compact a session before it overflows.
+# PSI's gateway reports max_model_len 262144 for Qwen3.8-27B.
+# Default: 0 (unset; OpenCode receives no limit).
+# context_limit = 262144
+# Optional maximum output in tokens. Requires context_limit and must be smaller than it.
+# Default: 0, which uses min(32768, context_limit / 4) when context_limit is set.
+# output_limit = 32768
+
+# Name each MCP through its table key; add more tables for additional servers.
+# The name is used unchanged in OpenCode's mcp configuration.
+# [mcp.bec_mcp]
+# Optional remote HTTP MCP endpoint. Its server IPs and TCP port join the outbound allowlist.
+# HTTP(S) MCP connections do not need published container ports.
+# url = "http://mcp.example:8000/mcp"
+# Optional container TCP port for this server, published on host loopback.
+# Omit or use 0 to disable. Use 1024 to 65535, excluding OpenCode's port 4096.
+# Each server's published container port must be unique; a host port is allocated automatically.
+# This does not start a server; HTTP(S) connections do not require port publishing.
+# port = 19000
+
+# To let bob start a host HTTP MCP server, keep url and add host_command below.
+# host_command executes OUTSIDE the container, without shell parsing.
+# It must stay in the foreground. Bob waits for its TCP port and stops its process group on exit.
+# The URL must use host.docker.internal (Docker) or host.containers.internal (Podman).
+# The command inherits bob's launch directory; use an installed server executable.
+# Native Linux requires a container-reachable listener as well as loopback for readiness.
+# For example, --host 0.0.0.0 listens on both; authenticate or restrict inbound host access.
+# Docker Desktop can forward to a loopback-only host listener.
+# host_command = ["/path/to/bec-mcp-server", "--transport", "streamable-http", "--port", "19000", "--allow-unauthenticated", "--allowed-hosts", "host.docker.internal:19000"]
+# Host MCP dependencies and service access belong on the host, not in the agent image.
+# This does not publish a container port or give the agent direct access to Redis.
