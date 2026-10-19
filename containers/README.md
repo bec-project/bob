@@ -1,10 +1,10 @@
 # OpenCode container
 
 Build from the repository root, then launch with the
-[container manager](../container_manager/README.md):
+[container manager](../launcher/container_manager/README.md):
 
 ```sh
-docker build -t localhost/bob ./container
+docker build -t localhost/bob ./containers
 ```
 
 Rebuild after changes to the Dockerfile, entrypoint, firewall, or OpenCode configuration.
@@ -16,7 +16,7 @@ container; install their dependencies on their own host.
 The entrypoint starts as root, verifies active seccomp filtering, and installs IPv4/IPv6
 firewall rules through `network.py`. It then switches to the selected UID/GID, removes
 all capabilities, and enables no-new-privileges. OpenCode becomes PID 1. Any bootstrap
-failure prevents agent execution. See the manager's [network policy](../container_manager/README.md#network-policy).
+failure prevents agent execution. See the manager's [network policy](../launcher/container_manager/README.md#network-policy).
 
 The manager supplies provider settings (`LLM_BASE_URL`, `LLM_MODEL_ID`, `API_KEY`), the
 endpoint allowlist (`BOB_EGRESS_URLS`), filesystem identity (`BOB_UID`, `BOB_GID`,

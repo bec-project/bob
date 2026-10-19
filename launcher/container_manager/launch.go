@@ -19,7 +19,7 @@ type userSettings struct {
 
 const launchLabel = "io.bob.launch"
 
-// openCodeProvider is the provider name defined in the image's container/opencode.json.
+// openCodeProvider is the provider name defined in the image's containers/opencode.json.
 const openCodeProvider = "self-hosted"
 
 func seccompArgs(engine string) []string {
