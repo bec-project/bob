@@ -75,3 +75,12 @@ model = "Qwen3.8-27B"
 # host_command = ["/path/to/bec-mcp-server", "--transport", "streamable-http", "--port", "19000", "--allow-unauthenticated", "--allowed-hosts", "host.docker.internal:19000"]
 # Host MCP dependencies and service access belong on the host, not in the agent image.
 # This does not publish a container port or give the agent direct access to Redis.
+
+# Optional OpenCode configuration directory: agent profiles (agents/*.md), commands
+# (commands/*.md) and an opencode.json, for example with permission rules. Bob mounts it
+# read-only and passes it to OpenCode as OPENCODE_CONFIG_DIR; relative paths resolve beside
+# this file. It needs a .gitignore file (an empty one is enough) and must not overlap the
+# workspace or other writable mounts. deploy/opencode holds two demo agents; from a bob.toml in
+# the repository root:
+# [opencode]
+# config_dir = "deploy/opencode"

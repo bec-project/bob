@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -101,6 +102,37 @@ func TestMountLabelPolicyPreservesReadOnlyFlags(t *testing.T) {
 				t.Fatalf("incorrect mount policy: %v", args)
 			}
 		})
+	}
+}
+
+func TestLaunchMountsOpenCodeConfigDirReadOnly(t *testing.T) {
+	for _, policy := range []string{"", "shared", "private"} {
+		t.Run(policy, func(t *testing.T) {
+			input := DefaultOptions()
+			input.MountLabel = policy
+			options := resolvedOptions{Options: input, mounts: []mount{{path: "/workspace"}}, openCodeConfigDir: "/srv/bob/opencode"}
+			args, env, err := getLaunchArgs(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "/srv/bob/opencode:/etc/opencode/deployment:ro" + map[string]string{"": "", "shared": ",z", "private": ",Z"}[policy]
+			command := strings.Join(args, " ")
+			if !strings.Contains(command, "--volume "+want+" ") || !strings.Contains(command, "--env OPENCODE_CONFIG_DIR ") {
+				t.Fatalf("configuration directory not mounted read-only: %v", args)
+			}
+			if !slices.Contains(env, "OPENCODE_CONFIG_DIR=/etc/opencode/deployment") {
+				t.Fatalf("OPENCODE_CONFIG_DIR not set: %v", env)
+			}
+		})
+	}
+	args, env, err := getLaunchArgs(resolvedOptions{Options: DefaultOptions(), mounts: []mount{{path: "/workspace"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(args, " "), openCodeConfigTarget) || slices.ContainsFunc(env, func(entry string) bool {
+		return strings.HasPrefix(entry, "OPENCODE_CONFIG_DIR=")
+	}) {
+		t.Fatal("configuration directory used without opencode.config_dir")
 	}
 }
 
