@@ -61,6 +61,17 @@ The CLI reads `bob.toml`, or `--config PATH`. See
   Connection JSON now returns `mcpPorts`, a map of server names to published host
   addresses, replacing the former single `mcpPort` field. It is omitted when no MCP
   ports are published.
+- **OpenCode configuration:** optional `opencode.config_dir` names a host directory of
+  OpenCode agent profiles (`agents/*.md`), commands (`commands/*.md`) and an `opencode.json`,
+  so each deployment can bring its own agents and permission rules without an image rebuild.
+  Bob mounts it read-only at `/etc/opencode/deployment` and sets `OPENCODE_CONFIG_DIR`;
+  relative paths resolve beside the config. It must not overlap writable agent mounts,
+  including through symlinks, so the agent cannot rewrite its own profiles. It needs a
+  `.gitignore` file (an empty one is enough): OpenCode writes one there at startup and
+  fails every request when it cannot. Plugins that OpenCode would have to install are
+  unsupported there. [deploy/opencode](../../deploy/opencode/README.md) has two demo agents.
+  Permission rules steer OpenCode but are not a security boundary: tools the agent runs
+  can reach the configured MCP endpoints directly.
 - **Access:** OpenCode serves its API (`serve`) on a generated host port with a generated
   password; bob's GUI is its user interface. The default bind address is `0.0.0.0`;
   use `127.0.0.1` for host-only access. Remote access needs the host's reachable address

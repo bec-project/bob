@@ -155,6 +155,64 @@ func TestMountDestinationsProtectTemporaryFilesystemAndImageAliases(t *testing.T
 	}
 }
 
+func TestOpenCodeConfigDir(t *testing.T) {
+	newConfigDir := func(parent string) string {
+		t.Helper()
+		directory := filepath.Join(parent, "opencode")
+		if err := os.MkdirAll(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, ".gitignore"), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		return directory
+	}
+	workdir := t.TempDir()
+	workspace := []mount{{path: workdir}}
+	configDir := newConfigDir(t.TempDir())
+	if path, err := getOpenCodeConfigDir("", workspace); err != nil || path != "" {
+		t.Fatalf("unset config_dir: %q, %v", path, err)
+	}
+	if path, err := getOpenCodeConfigDir(configDir, workspace); err != nil || path != configDir {
+		t.Fatalf("valid config_dir: %q, %v", path, err)
+	}
+	// Read-only mounts may share it: the agent cannot change it through them.
+	if _, err := getOpenCodeConfigDir(configDir, append(workspace, mount{path: filepath.Dir(configDir), readOnly: true})); err != nil {
+		t.Fatal(err)
+	}
+
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	ignoreDirectory := t.TempDir()
+	if err := os.Mkdir(filepath.Join(ignoreDirectory, ".gitignore"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(workdir, alias); err != nil {
+		t.Fatal(err)
+	}
+	inWorkspace := newConfigDir(workdir)
+	for name, test := range map[string]struct {
+		directory string
+		mounts    []mount
+	}{
+		"missing":                       {filepath.Join(t.TempDir(), "missing"), workspace},
+		"a file":                        {file, workspace},
+		"without .gitignore":            {t.TempDir(), workspace},
+		".gitignore is a directory":     {ignoreDirectory, workspace},
+		"inside the workspace":          {inWorkspace, workspace},
+		"inside the workspace by alias": {filepath.Join(alias, "opencode"), workspace},
+		"containing the workspace":      {filepath.Dir(configDir), []mount{{path: configDir}}},
+		"inside a writable mount":       {configDir, append(workspace, mount{path: filepath.Dir(configDir)})},
+	} {
+		if _, err := getOpenCodeConfigDir(test.directory, test.mounts); err == nil {
+			t.Errorf("accepted a config_dir %s", name)
+		}
+	}
+}
+
 func TestNamedMCPValidation(t *testing.T) {
 	for _, test := range []struct {
 		name   string

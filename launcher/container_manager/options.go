@@ -50,6 +50,10 @@ type Options struct {
 	OutputLimit int
 	// MCPServers maps OpenCode server names to their connection settings.
 	MCPServers map[string]MCPServer
+	// OpenCodeConfigDir is an optional host directory of OpenCode agents, commands and
+	// configuration. It is mounted read-only and passed to OpenCode as OPENCODE_CONFIG_DIR.
+	// It must contain a .gitignore file and must not overlap writable agent mounts.
+	OpenCodeConfigDir string
 }
 
 // defaultOutputLimit caps the output limit derived from ContextLimit; OpenCode's model
@@ -202,6 +206,8 @@ type resolvedOptions struct {
 	userConfig userSettings
 	password   string
 	launchID   string
+	// openCodeConfigDir is the validated absolute host path of Options.OpenCodeConfigDir.
+	openCodeConfigDir string
 }
 
 func getResolvedOptions(input Options) (resolvedOptions, error) {
@@ -221,6 +227,10 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 		return resolvedOptions{}, err
 	}
 	options.mounts, err = getMounts(options.Options)
+	if err != nil {
+		return resolvedOptions{}, err
+	}
+	options.openCodeConfigDir, err = getOpenCodeConfigDir(input.OpenCodeConfigDir, options.mounts)
 	if err != nil {
 		return resolvedOptions{}, err
 	}
@@ -437,6 +447,53 @@ func getMounts(input Options) ([]mount, error) {
 		}
 	}
 	return mounts, nil
+}
+
+// openCodeConfigTarget is where the OpenCode configuration directory appears in the container.
+const openCodeConfigTarget = "/etc/opencode/deployment"
+
+// getOpenCodeConfigDir validates the optional OpenCode configuration directory. The agent
+// must not reach it through a writable mount, or it could rewrite its own agents and rules.
+func getOpenCodeConfigDir(directory string, mounts []mount) (string, error) {
+	if directory == "" {
+		return "", nil
+	}
+	path, err := filepath.Abs(directory)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("opencode.config_dir: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("opencode.config_dir is not a directory: %s", path)
+	}
+	if strings.ContainsAny(path, ",:\n") {
+		return "", errors.New("opencode.config_dir cannot contain commas, colons, or newlines")
+	}
+	// OpenCode writes a .gitignore into its configuration directory at startup unless one
+	// exists, and fails every request when that write hits the read-only mount.
+	if ignore, err := os.Stat(filepath.Join(path, ".gitignore")); err != nil || !ignore.Mode().IsRegular() {
+		return "", errors.New("opencode.config_dir needs a .gitignore file (an empty one is enough): OpenCode cannot create it in the read-only mount")
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	for _, mount := range mounts {
+		if mount.readOnly {
+			continue
+		}
+		writable, err := filepath.EvalSymlinks(mount.path)
+		if err != nil {
+			return "", err
+		}
+		if pathsOverlap(path, mount.path) || pathsOverlap(resolved, writable) {
+			return "", errors.New("opencode.config_dir must not overlap writable agent mounts, including through symlinks")
+		}
+	}
+	return path, nil
 }
 
 func pathsOverlap(a, b string) bool {

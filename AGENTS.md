@@ -54,7 +54,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `gui/web/` — chat UI for the OpenCode API (React, Vite, TypeScript), its plugins (BEC) and the
   `bob-gui` launcher script
 - `gui/desktop/` — the Tauri desktop shell around the same UI
-- `deploy/` — deployment configuration, including the annotated `bob.example.toml`
+- `deploy/` — deployment configuration, including the annotated `bob.example.toml` and the example
+  OpenCode agents in `deploy/opencode/`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
 - `ci/` — release binary packaging
