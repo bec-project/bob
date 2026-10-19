@@ -15,7 +15,6 @@ import (
 // config describes the TOML sections; the manager receives plain Options.
 type config struct {
 	Container struct {
-		Web         bool   `toml:"web"`
 		Runtime     string `toml:"runtime"`
 		Image       string `toml:"image"`
 		HomeVolume  string `toml:"home_volume"`
@@ -65,7 +64,6 @@ func loadConfig(path string) (containermanager.Options, error) {
 	}
 	input = containermanager.Options{
 		Runtime:      settings.Container.Runtime,
-		Web:          settings.Container.Web,
 		Image:        settings.Container.Image,
 		HomeVolume:   settings.Container.HomeVolume,
 		Name:         settings.Container.Name,

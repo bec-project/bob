@@ -1,9 +1,8 @@
-// container_manager launches a headless OpenCode backend until interrupted.
+// bob-manager runs the per-user broker that keeps one bob for every GUI a user opens.
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,26 +20,24 @@ type invocation struct {
 	options containermanager.Options
 	// config is the configuration file's absolute path.
 	config string
-	// shared attaches to (or starts) the user's one shared bob instead of starting a private one.
-	shared bool
-	// broker serves the shared bob; consumers start it with this flag.
-	broker   bool
-	linger   time.Duration
-	consumer string
+	// broker serves bob itself; `bob-manager` starts it detached when none runs.
+	broker bool
+	linger time.Duration
 }
 
 func parseArgs(args []string) (invocation, error) {
 	var call invocation
-	flags := flag.NewFlagSet("container_manager", flag.ContinueOnError)
+	flags := flag.NewFlagSet("bob-manager", flag.ContinueOnError)
 	config := flags.String("config", "bob.toml", "Configuration file")
-	flags.BoolVar(&call.shared, "shared", false,
-		"Use the bob this user already runs, starting it if none does; it stops after the last consumer")
-	flags.DurationVar(&call.linger, "linger", defaultLinger,
-		"With --shared, how long bob outlives its last consumer")
-	flags.StringVar(&call.consumer, "consumer", "cli", "With --shared, a name for this consumer in the broker log")
-	flags.BoolVar(&call.broker, "broker", false, "Serve the shared bob (started by --shared consumers)")
+	flags.DurationVar(&call.linger, "linger", defaultLinger, "How long bob outlives its last client")
+	flags.BoolVar(&call.broker, "broker", false, "Run the broker itself (bob-manager starts it when none runs)")
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: container_manager [--config PATH] [--shared [--linger DURATION] [--consumer NAME]]")
+		fmt.Fprintln(flags.Output(), "Usage: bob-manager [--config PATH] [--linger DURATION]")
+		fmt.Fprintln(flags.Output(), "\nbob starts from its GUI. bob-manager makes sure this user's bob broker runs, starting it")
+		fmt.Fprintln(flags.Output(), "with this configuration when none does, and prints the broker's socket; GUIs and other")
+		fmt.Fprintln(flags.Output(), "clients connect there for bob's connection. bob starts with the first client and stops")
+		fmt.Fprintln(flags.Output(), "the linger time after the last one leaves.")
+		fmt.Fprintln(flags.Output())
 		flags.PrintDefaults()
 		fmt.Fprintln(flags.Output(), "\nCreate bob.toml from the repository's deploy/bob.example.toml and edit its workspace,")
 		fmt.Fprintln(flags.Output(), "or select an existing file with --config PATH.")
@@ -74,7 +71,7 @@ func getOptions(args []string) (containermanager.Options, error) {
 	return call.options, err
 }
 
-func run() (runErr error) {
+func run() error {
 	call, err := parseArgs(os.Args[1:])
 	if err == flag.ErrHelp {
 		return nil
@@ -84,33 +81,12 @@ func run() (runErr error) {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	switch {
-	case call.broker:
+	if call.broker {
 		return runBroker(ctx, call.config, call.options, call.linger)
-	case call.shared:
-		return runShared(ctx, call.config, call.consumer, call.linger, os.Stdout)
 	}
-	input := call.options
-	manager := &containermanager.Manager{}
-	defer func() {
-		if err := manager.Stop(context.Background()); err != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("cleanup: %w", err))
-		}
-	}()
-	connection, err := manager.Start(ctx, input)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil
-		}
-		return err
-	}
-	// Connection credentials go to the caller, never the model-provider API key.
-	if err := json.NewEncoder(os.Stdout).Encode(connection); err != nil {
-		return err
-	}
-	<-ctx.Done()
-	return nil
+	return runLocate(ctx, call.config, call.linger, os.Stdout)
 }
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

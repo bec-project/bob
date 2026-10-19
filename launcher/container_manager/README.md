@@ -61,8 +61,8 @@ The CLI reads `bob.toml`, or `--config PATH`. See
   Connection JSON now returns `mcpPorts`, a map of server names to published host
   addresses, replacing the former single `mcpPort` field. It is omitted when no MCP
   ports are published.
-- **Access:** `container.web = true` enables the browser UI; the default is headless `serve`.
-  Both use a generated host port and password. The default bind address is `0.0.0.0`;
+- **Access:** OpenCode serves its API (`serve`) on a generated host port with a generated
+  password; bob's GUI is its user interface. The default bind address is `0.0.0.0`;
   use `127.0.0.1` for host-only access. Remote access needs the host's reachable address
   and a trusted network or HTTPS ingress. Treat connection JSON as a credential.
 
@@ -71,34 +71,38 @@ On enforcing SELinux hosts, use pre-labeled mounts or explicitly select
 avoid system directories and whole home directories. Private labels are unsuitable for
 mounts shared with other containers.
 
-## Shared mode
+## How bob runs
 
-`--shared` gives each user one bob that every consumer uses: the GUI, a desktop app, BEC
-widgets. A consumer runs
+Each user has one bob, started by their first GUI and shared by every client of that user: the
+browser GUI, the desktop app, later BEC widgets. bob has no headless mode; a container runs only
+while a client holds it, and for the linger time after the last one leaves.
+
+A per-user broker owns the container. A client finds it with
 
 ```sh
-bob-manager --shared --config bob.toml [--consumer NAME] [--linger 90s]
+bob-manager --config bob.toml [--linger 90s]
 ```
 
-and gets the same connection line as the classic mode. It attaches to the bob the user already
-runs, or starts a broker that runs bob with this bob.toml when none does (a bob that is already
-running keeps its own configuration; the consumer warns when they differ). The consumer holds a
-lease until it is interrupted (SIGINT or SIGTERM), its parent process exits, or bob goes away.
-Once the last lease is gone, the broker waits `--linger` (default 90 s, so a restarting consumer
-keeps bob) and then stops bob the usual way, removing the container.
+which makes sure the broker runs, starting a detached one with this bob.toml when none answers,
+and prints one JSON line, `{"socket": "<path>"}`. The client then connects to that socket, sends
+one JSON line `{"consumer": "<name>", "pid": <pid>, "config": "<absolute bob.toml>"}` and reads
+one line back once bob is up: `{"connection": {...}, "config": "...", "consumers": <n>}` or
+`{"error": "..."}`. A bob that is already running keeps its own configuration; the reply's
+`config` names it. The client holds its lease for as long as it keeps the connection open, so
+quitting or crashing ends the lease too. The broker starts bob for the first client and, once
+the last lease has been gone for `--linger` (default 90 s, so reopening a GUI keeps bob), stops
+it the usual way, removing the container, and exits. A broker that no client joins exits without
+starting bob. Clients that only use a running bob, such as background services, should connect
+to the socket and not start a broker.
 
-The broker is the same executable started with `--broker`, detached in its own session so a
-terminal's Ctrl-C for one consumer does not reach it. Its socket, lock and log (`broker.log`) live
-in a private per-user directory: `$BOB_RUNTIME_DIR`, else `$XDG_RUNTIME_DIR/bob`, else
-`$TMPDIR/bob` on macOS, else `/tmp/bob-<uid>`. It must be on a local filesystem and accessible
-only to its owner. A lock file ensures one broker per user; a broker that finds the lock taken
-exits.
+The broker is the same executable run with `--broker`, detached in its own session so closing the
+client that started it does not reach it. Its socket, lock and log (`broker.log`) live in a
+private per-user directory: `$BOB_RUNTIME_DIR`, else `$XDG_RUNTIME_DIR/bob`, else `$TMPDIR/bob`
+on macOS, else `/tmp/bob-<uid>`. It must be on a local filesystem and accessible only to its
+owner. A lock file ensures one broker per user; a broker that finds the lock taken exits.
 
-Consumers that do not run the executable can use the socket (`broker.sock`) directly: send one
-JSON line `{"consumer": "<name>", "pid": <pid>, "config": "<absolute bob.toml>"}`, read one line
-back, `{"connection": {...}, "config": "...", "consumers": <n>}` or `{"error": "..."}` (it
-arrives once bob is up), and keep the connection open for as long as the lease should last. Start
-a broker first when the socket does not answer.
+The default home volume is `bob-<user name>-home`, so every bob of a user keeps the same sessions
+and users of one engine never share them. Set `container.home_volume` to keep an older volume.
 
 ## Runtime requirements
 

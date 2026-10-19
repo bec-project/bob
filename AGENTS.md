@@ -37,9 +37,9 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `launcher/container_manager/manager.go` — startup, helper lifecycle, cleanup, and readiness
 - `launcher/container_manager/runtime.go` — subprocess execution, cancellation, and failure classification
 - `launcher/cmd/container_manager/config.go` — TOML loading and relative paths
-- `launcher/cmd/container_manager/main.go` — arguments, signals, and connection output
-- `launcher/cmd/container_manager/shared.go` — `--shared` consumers and the per-user broker that runs one
-  Manager for all of them
+- `launcher/cmd/container_manager/main.go` — arguments, signals, and the broker-or-locate entry point
+- `launcher/cmd/container_manager/broker.go` — the per-user broker that runs one Manager for all of a
+  user's clients, and the locate step that starts it
 - `containers/network.py` and `containers/entrypoint.sh` — firewall bootstrap and privilege dropping
 - `containers/Dockerfile` and `containers/opencode.json` — image and OpenCode configuration
 - `launcher/container_manager/lifecycle_test.go` — fake engine and cleanup regression tests
@@ -76,9 +76,11 @@ If you change:
   update `deploy/bob.example.toml` and the configuration table when public settings change.
 - `launch.go`: check Docker and Podman argument generation, identities, security options, mount
   flags, and helper commands. Preserve values without shell interpolation.
-- `shared.go`: test leases (two consumers, one start), teardown after the last consumer and the
-  linger time, start failures reaching every consumer, cancellation before Stop, and the
-  one-broker lock; run the shared tests repeatedly with `-race -count=5`.
+- `broker.go`: test leases (two clients, one start, none before the first client), teardown after
+  the last client and the linger time, a killed client ending its lease, start failures reaching
+  every client, cancellation before Stop, and the one-broker lock; run the broker tests repeatedly
+  with `-race -count=5`. GUIs implement the client side (`gui/desktop/src/bob.rs`,
+  `gui/web/scripts/bob-gui.mjs`): keep them in step with the protocol.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
   retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
 - `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,
@@ -180,11 +182,11 @@ directory for that command. Do not change global tooling configuration to run on
 
 For a local launch, build the image, copy `deploy/bob.example.toml` to the ignored `bob.toml`, and
 configure
-the workspace, engine, provider URL, and any token before running:
+the workspace, engine, provider URL, and any token before starting bob from its GUI:
 
 ```bash
-go -C launcher build -o ../build/bob-manager ./cmd/container_manager
-build/bob-manager --config bob.toml
+npm --prefix gui/web install
+npm --prefix gui/web run bob -- --config bob.toml
 ```
 
 Keep the host launcher and other host-executed code outside the agent's writable workspace.

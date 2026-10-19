@@ -101,8 +101,8 @@ export function startBob(binary: string, config: string): Promise<string> {
   return tauriInvoke("start_bob", { binary, config });
 }
 
-/** Stops a bob this app started, or all of them; resolves with the ones that did not stop. */
-export function stopBob(container?: string): Promise<string[]> {
+/** Ends this app's hold on a bob, or on all of them; bob stops once no app holds it. */
+export function stopBob(container?: string): Promise<void> {
   return tauriInvoke("stop_bob", { container: container ?? null });
 }
 

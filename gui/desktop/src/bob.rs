@@ -1,30 +1,30 @@
 //! Finding, joining and leaving bob from the desktop app.
 //!
-//! The app uses the user's shared bob: it runs `bob --shared`, which attaches to the bob this
-//! user already runs or starts it, and holds a lease while that child process lives. The app
-//! ends the lease with SIGINT (or by exiting, which the child notices); bob's broker removes the
-//! container once the last consumer is gone.
+//! bob runs once per user, owned by a broker process. `bob-manager --config bob.toml` makes
+//! sure the broker runs, starting it when none does, and prints its socket. The app connects
+//! there, says hello and gets bob's connection once bob is up. It holds its lease for as long as
+//! it keeps that connection open, so leaving bob, quitting and crashing all end it; the broker
+//! stops bob 90 s after the last client is gone.
 //!
 //! The connect screen also lists every container with bob's `io.bob.launch` label on Docker or
-//! Podman, for bobs started without --shared; their OpenCode password is read back from the
-//! container's environment, which only someone who can already control the engine can do.
+//! Podman; their OpenCode password is read back from the container's environment, which only
+//! someone who can already control the engine can do.
 
-use std::collections::VecDeque;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::process::{Command, Stdio};
+use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 const LAUNCH_LABEL: &str = "io.bob.launch";
 const OPENCODE_PORT: &str = "4096/tcp";
-const LOG_LINES: usize = 200;
+/// bob's own startup limit is 90 s, and the broker may first remove the previous container.
 const START_TIMEOUT: Duration = Duration::from_secs(180);
-const STOP_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// A bob container found on an engine, with what the GUI needs to connect to it.
 #[derive(Serialize, Clone)]
@@ -40,13 +40,14 @@ pub struct RunningBob {
     pub owned_config: Option<String>,
 }
 
+/// A lease on bob: the open connection to the broker.
 struct Owned {
-    child: Child,
+    lease: UnixStream,
     config: String,
     container: String,
 }
 
-/// The bobs this app started; they are stopped when the app quits.
+/// The leases this app holds; they end when the app exits, however it exits.
 #[derive(Default)]
 pub struct BobState {
     owned: Mutex<Vec<Owned>>,
@@ -211,25 +212,12 @@ pub fn list(state: &BobState) -> Vec<RunningBob> {
     found
 }
 
-fn push_log(log: &Arc<Mutex<VecDeque<String>>>, line: String) {
-    let mut log = log.lock().unwrap();
-    if log.len() == LOG_LINES {
-        log.pop_front();
-    }
-    log.push_back(line);
+fn tail(text: &str, lines: usize) -> String {
+    let all: Vec<&str> = text.lines().collect();
+    all[all.len().saturating_sub(lines)..].join("\n")
 }
 
-fn log_tail(log: &Arc<Mutex<VecDeque<String>>>, lines: usize) -> String {
-    let log = log.lock().unwrap();
-    let skip = log.len().saturating_sub(lines);
-    log.iter()
-        .skip(skip)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// Joins the user's shared bob, starting it with this bob.toml when none runs, and returns its
+/// Joins the user's bob, starting it with this bob.toml when none runs, and returns its
 /// connection line once OpenCode is up. The lease lasts until `stop` or the app exits.
 pub fn start(state: &BobState, binary: &str, config: &str) -> Result<String, String> {
     let config_path = Path::new(config);
@@ -242,124 +230,88 @@ pub fn start(state: &BobState, binary: &str, config: &str) -> Result<String, Str
     }
     // bob resolves relative paths beside the config; host commands start in the launch directory
     let launch_dir = config_path.parent().unwrap_or(Path::new("/"));
-    let mut child = Command::new(binary)
-        .args(["--shared", "--consumer", "bob-gui", "--config"])
+    let located = Command::new(binary)
+        .arg("--config")
         .arg(config)
         .current_dir(launch_dir)
         .env("PATH", engine_path())
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .map_err(|error| format!("cannot run {}: {error}", binary.display()))?;
-
-    let log = Arc::new(Mutex::new(VecDeque::new()));
-    let (tx, rx) = mpsc::channel::<String>();
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-    {
-        let log = log.clone();
-        std::thread::spawn(move || {
-            let mut sent = false;
-            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                let is_connection = !sent
-                    && serde_json::from_str::<Value>(&line)
-                        .map(|v| v.get("url").is_some() && v.get("password").is_some())
-                        .unwrap_or(false);
-                if is_connection {
-                    sent = true;
-                    let _ = tx.send(line);
-                } else {
-                    push_log(&log, line);
-                }
-            }
-        });
+    let stdout = String::from_utf8_lossy(&located.stdout);
+    if !located.status.success() {
+        let stderr = String::from_utf8_lossy(&located.stderr);
+        return Err(format!(
+            "bob could not start ({}):\n{}",
+            located.status,
+            tail(&stderr, 20)
+        ));
     }
-    {
-        let log = log.clone();
-        std::thread::spawn(move || {
-            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                push_log(&log, line);
-            }
-        });
-    }
-
-    let deadline = Instant::now() + START_TIMEOUT;
-    let line = loop {
-        if let Ok(line) = rx.recv_timeout(Duration::from_millis(200)) {
-            break line;
-        }
-        if let Ok(Some(status)) = child.try_wait() {
-            return Err(format!(
-                "bob exited ({status}) before it was ready:\n{}",
-                log_tail(&log, 20)
-            ));
-        }
-        if Instant::now() > deadline {
-            interrupt(&mut child);
-            let _ = wait_for(&mut child, STOP_TIMEOUT);
-            return Err(format!(
-                "bob was not ready after {} s:\n{}",
-                START_TIMEOUT.as_secs(),
-                log_tail(&log, 20)
-            ));
-        }
-    };
+    let socket = stdout
+        .lines()
+        .find_map(|line| {
+            let value: Value = serde_json::from_str(line).ok()?;
+            value.get("socket")?.as_str().map(String::from)
+        })
+        .ok_or_else(|| format!("bob printed no broker socket:\n{}", tail(&stdout, 20)))?;
+    let (line, lease) = lease(&socket, config)?;
     let container = serde_json::from_str::<Value>(&line)
         .ok()
         .and_then(|v| v.get("container").and_then(Value::as_str).map(String::from))
         .unwrap_or_default();
     state.owned.lock().unwrap().push(Owned {
-        child,
+        lease,
         config: config.to_string(),
         container,
     });
     Ok(line)
 }
 
-fn interrupt(child: &mut Child) {
-    // SIGINT ends this app's lease, as Ctrl-C does in a terminal; the broker stops bob when it
-    // was the last one
-    unsafe {
-        libc::kill(child.id() as libc::pid_t, libc::SIGINT);
+/// Asks the broker for bob: one hello line out, one reply line back. Keeping the returned
+/// connection open holds the lease.
+fn lease(socket: &str, config: &str) -> Result<(String, UnixStream), String> {
+    let mut stream = UnixStream::connect(socket)
+        .map_err(|error| format!("cannot reach bob's broker at {socket}: {error}"))?;
+    let hello = json!({"consumer": "bob-gui", "pid": std::process::id(), "config": config});
+    writeln!(stream, "{hello}").map_err(|error| format!("cannot talk to bob's broker: {error}"))?;
+    stream.set_read_timeout(Some(START_TIMEOUT)).ok();
+    let mut reply = String::new();
+    BufReader::new(&stream)
+        .read_line(&mut reply)
+        .map_err(|error| format!("bob's broker did not answer: {error}"))?;
+    stream.set_read_timeout(None).ok();
+    let reply: Value = serde_json::from_str(reply.trim())
+        .map_err(|_| "bob's broker closed the connection before bob was up".to_string())?;
+    if let Some(error) = reply.get("error").and_then(Value::as_str) {
+        return Err(error.to_string());
     }
-}
-
-fn wait_for(child: &mut Child, timeout: Duration) -> bool {
-    let deadline = Instant::now() + timeout;
-    while Instant::now() < deadline {
-        if let Ok(Some(_)) = child.try_wait() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
-    false
-}
-
-/// Ends this app's leases (all of them, or the one on this container). bob itself stops when
-/// no other consumer holds it. Returns the containers whose lease did not end in time.
-pub fn stop(state: &BobState, container: Option<&str>) -> Vec<String> {
-    let mut stopping: Vec<Owned> = {
-        let mut owned = state.owned.lock().unwrap();
-        let (chosen, kept): (Vec<_>, Vec<_>) = owned
-            .drain(..)
-            .partition(|o| container.is_none_or(|c| o.container == c));
-        *owned = kept;
-        chosen
-    };
-    for bob in &mut stopping {
-        interrupt(&mut bob.child);
-    }
-    let mut left = Vec::new();
-    for bob in &mut stopping {
-        if !wait_for(&mut bob.child, STOP_TIMEOUT) {
-            left.push(bob.container.clone());
+    let connection = reply
+        .get("connection")
+        .ok_or("bob's broker sent no connection")?;
+    if let Some(running) = reply.get("config").and_then(Value::as_str) {
+        if running != config {
+            eprintln!(
+                "bob already runs for this user with {running}; using it instead of {config}"
+            );
         }
     }
-    left
+    Ok((connection.to_string(), stream))
 }
 
-pub fn owns_any(state: &BobState) -> bool {
+/// Ends this app's leases (all of them, or the one on this container) by closing their
+/// connections. bob itself stops when no other client holds it.
+pub fn stop(state: &BobState, container: Option<&str>) {
+    state.owned.lock().unwrap().retain(|owned| {
+        let leave = container.is_none_or(|c| owned.container == c);
+        if leave {
+            let _ = owned.lease.shutdown(Shutdown::Both);
+        }
+        !leave
+    });
+}
+
+#[cfg(test)]
+fn owns_any(state: &BobState) -> bool {
     !state.owned.lock().unwrap().is_empty()
 }
 
@@ -367,10 +319,14 @@ pub fn owns_any(state: &BobState) -> bool {
 mod tests {
     use super::{list, owns_any, running_bob, start, stop, BobState};
     use serde_json::json;
+    use std::io::{BufRead, BufReader, Read, Write};
     use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::net::UnixListener;
     use std::path::PathBuf;
+    use std::sync::mpsc;
+    use std::time::Duration;
 
-    /// A stand-in for bob: prints a connection line, then waits for SIGINT like bob does.
+    /// A stand-in for bob-manager: prints the socket of a broker the test runs.
     fn fake_bob(dir: &std::path::Path, script: &str) -> PathBuf {
         let path = dir.join("fake-bob");
         std::fs::write(&path, script).unwrap();
@@ -385,38 +341,62 @@ mod tests {
         dir
     }
 
+    /// A broker that answers one client with `reply` and reports when its lease ends.
+    fn fake_broker(socket: &std::path::Path, reply: &'static str) -> mpsc::Receiver<String> {
+        let listener = UnixListener::bind(socket).unwrap();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut hello = String::new();
+            reader.read_line(&mut hello).unwrap();
+            tx.send(hello).unwrap();
+            writeln!(&stream, "{reply}").unwrap();
+            let mut rest = String::new();
+            let _ = reader.read_to_string(&mut rest);
+            tx.send("lease ended".to_string()).unwrap();
+        });
+        rx
+    }
+
     #[test]
-    fn starts_bob_and_stops_it_with_sigint() {
-        let dir = temp_dir("start");
-        let marker = dir.join("stopped");
-        let script = format!(
-            "#!/bin/sh\ntrap 'touch {}; exit 0' INT\necho starting >&2\n\
-             echo '{{\"url\":\"http://127.0.0.1:1\",\"password\":\"p\",\"container\":\"fake-1\"}}'\n\
-             while :; do sleep 0.1; done\n",
-            marker.display()
+    fn holds_a_lease_until_stopped() {
+        let dir = temp_dir("lease");
+        let socket = dir.join("b.sock");
+        let broker = fake_broker(
+            &socket,
+            r#"{"connection":{"url":"http://127.0.0.1:1","password":"p","container":"fake-1"},"config":"x","consumers":1}"#,
         );
-        let binary = fake_bob(&dir, &script);
+        let binary = fake_bob(
+            &dir,
+            &format!(
+                "#!/bin/sh\necho '{{\"socket\":\"{}\"}}'\n",
+                socket.display()
+            ),
+        );
         let state = BobState::default();
         let config = dir.join("bob.toml").display().to_string();
         let line = start(&state, binary.to_str().unwrap(), &config).unwrap();
-        assert!(line.contains("\"container\":\"fake-1\""));
+        assert!(line.contains("\"container\":\"fake-1\""), "{line}");
+        let hello = broker.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(hello.contains("\"consumer\":\"bob-gui\""), "{hello}");
+        assert!(hello.contains(&config), "{hello}");
         assert!(owns_any(&state));
-        assert!(stop(&state, Some("other")).is_empty());
-        assert!(
-            owns_any(&state),
-            "stopping another container must keep this one"
-        );
-        assert!(stop(&state, None).is_empty());
+        stop(&state, Some("other"));
+        assert!(owns_any(&state), "leaving another bob must keep this lease");
+        assert!(broker.recv_timeout(Duration::from_millis(300)).is_err());
+        stop(&state, None);
         assert!(!owns_any(&state));
-        assert!(
-            marker.exists(),
-            "bob must get SIGINT so it can remove its container"
+        assert_eq!(
+            broker.recv_timeout(Duration::from_secs(5)).unwrap(),
+            "lease ended",
+            "closing the connection must end the lease"
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn reports_a_bob_that_exits_before_it_is_ready() {
+    fn reports_a_start_failure() {
         let dir = temp_dir("fail");
         let binary = fake_bob(
             &dir,
@@ -425,16 +405,30 @@ mod tests {
         let state = BobState::default();
         let config = dir.join("bob.toml").display().to_string();
         let error = start(&state, binary.to_str().unwrap(), &config).unwrap_err();
-        assert!(error.contains("exited"), "{error}");
+        assert!(error.contains("could not start"), "{error}");
         assert!(error.contains("start the docker engine first"), "{error}");
         assert!(!owns_any(&state));
         assert!(start(&state, binary.to_str().unwrap(), "/nonexistent/bob.toml").is_err());
+
+        // bob that failed in the broker: the client gets the broker's error
+        let socket = dir.join("e.sock");
+        let _broker = fake_broker(&socket, r#"{"error":"no space left on device"}"#);
+        let binary = fake_bob(
+            &dir,
+            &format!(
+                "#!/bin/sh\necho '{{\"socket\":\"{}\"}}'\n",
+                socket.display()
+            ),
+        );
+        let error = start(&state, binary.to_str().unwrap(), &config).unwrap_err();
+        assert_eq!(error, "no space left on device");
+        assert!(!owns_any(&state));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// Joins (starts) a real shared bob, finds it among the running containers, ends the lease
-    /// and checks that the broker removes the container. Needs an engine and an image; use a
-    /// private BOB_RUNTIME_DIR so the test does not join your own shared bob:
+    /// Joins (starts) a real bob, finds it among the running containers, ends the lease and
+    /// checks that the broker removes the container. Needs an engine and an image; use a
+    /// private BOB_RUNTIME_DIR so the test does not join your own bob:
     /// BOB_RUNTIME_DIR=$(mktemp -d) BOB_GUI_E2E_BIN=$PWD/../../build/bob-manager
     /// BOB_GUI_E2E_CONFIG=/path/bob.toml cargo test -- --ignored
     #[test]
@@ -457,7 +451,7 @@ mod tests {
             connection["url"].as_str().unwrap().trim_end_matches('/')
         );
         assert_eq!(found.owned_config.as_deref(), Some(config.as_str()));
-        assert!(stop(&state, None).is_empty());
+        stop(&state, None);
         // the broker removes the container once the linger time after the last lease is over
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(150);
         while list(&state).iter().any(|b| b.container == container) {
