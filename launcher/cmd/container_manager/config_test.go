@@ -156,7 +156,7 @@ ro =`), 0600); err != nil {
 }
 
 func TestExampleConfig(t *testing.T) {
-	_, err := loadConfig("../../bob.example.toml")
+	_, err := loadConfig("../../../deploy/bob.example.toml")
 	if err != nil && !strings.Contains(err.Error(), "provider.base_url is a placeholder") {
 		t.Fatalf("example config could not be loaded: %v", err)
 	}
