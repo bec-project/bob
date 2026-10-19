@@ -4,8 +4,9 @@
 follow existing local patterns, and preserve lifecycle cleanup and the container's isolation policy.
 
 This file is an agent-oriented operating manual. Human-facing documentation lives in
-[`README.md`](README.md), [`launcher/container_manager/README.md`](launcher/container_manager/README.md), and
-[`containers/README.md`](containers/README.md). Configuration examples live in `deploy/bob.example.toml`.
+[`README.md`](README.md), [`launcher/container_manager/README.md`](launcher/container_manager/README.md),
+[`containers/README.md`](containers/README.md) and [`gui/README.md`](gui/README.md). Configuration examples live in
+`deploy/bob.example.toml`.
 
 ## Core Rules
 
@@ -50,6 +51,9 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
   - `launcher/container_manager/` — reusable Go package, named `containermanager`, and its tests
 - `containers/` — what bob ships as containers: the image build context, Python firewall bootstrap,
   shell entrypoint, and network tests
+- `gui/web/` — chat UI for the OpenCode API (React, Vite, TypeScript), its plugins (BEC) and the
+  `bob-gui` launcher script
+- `gui/desktop/` — the Tauri desktop shell around the same UI
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
@@ -81,6 +85,11 @@ If you change:
   DNS pinning, loopback handling, and failures before agent execution.
 - `entrypoint.sh`, `Dockerfile`, or `opencode.json`: rebuild the image before real-engine
   validation. Check bootstrap identity, capability dropping, provider configuration, and MCP setup.
+- `gui/`: run `npm run typecheck`, `npm test` and `npx vite build` in `gui/web/`, and
+  `cargo fmt --check && cargo test` in `gui/desktop/` for Rust changes. Keep the
+  `@opencode-ai/sdk` version equal to the OpenCode version the image pins. The dev server's
+  `/__bob/*` routes and the Tauri commands must keep relaying only to loopback targets and must
+  not expose the connection file to other origins.
 - Documentation only: verify paths, commands, examples, and stated runtime limitations. A broad
   test run is unnecessary when executable behavior is unchanged.
 - CI or release tooling: run actionlint and the affected checks. Keep publishing in the trusted

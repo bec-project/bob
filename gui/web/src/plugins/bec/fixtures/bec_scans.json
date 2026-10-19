@@ -1,0 +1,90 @@
+{
+ "ok": true,
+ "summary": "16 scans available, of which mv, umv only move devices and record no data. Call bec_scan_help with a name for its arguments and an example.",
+ "findings": [],
+ "data": {
+  "scans": [
+   {
+    "name": "acquire",
+    "description": "A simple acquisition at the current position.",
+    "is_scan": true
+   },
+   {
+    "name": "cont_line_scan",
+    "description": "A continuous line scan. Use this scan if you want to move a motor continuously",
+    "is_scan": true
+   },
+   {
+    "name": "fermat_scan",
+    "description": "A scan following Fermat's spiral.",
+    "is_scan": true
+   },
+   {
+    "name": "grid_scan",
+    "description": "Scan two or more motors in a grid.",
+    "is_scan": true
+   },
+   {
+    "name": "hexagonal_scan",
+    "description": "Scan two motors in a hexagonal grid pattern.",
+    "is_scan": true
+   },
+   {
+    "name": "line_scan",
+    "description": "A line scan for one or more motors.",
+    "is_scan": true
+   },
+   {
+    "name": "line_sweep_scan",
+    "description": "Read out monitored devices while a single device moves continuously from",
+    "is_scan": true
+   },
+   {
+    "name": "list_scan",
+    "description": "A scan following the positions specified in a list.",
+    "is_scan": true
+   },
+   {
+    "name": "log_scan",
+    "description": "A scan for one or more motors with logarithmically spaced positions.",
+    "is_scan": true
+   },
+   {
+    "name": "multi_region_grid_scan",
+    "description": "Scan two motors on multiple independent rectangular sub-grids.",
+    "is_scan": true
+   },
+   {
+    "name": "multi_region_line_scan",
+    "description": "Scan one motor across multiple disjoint line regions.",
+    "is_scan": true
+   },
+   {
+    "name": "mv",
+    "description": "Simple move command that moves one or more motors to the specified positions.",
+    "is_scan": false
+   },
+   {
+    "name": "round_roi_scan",
+    "description": "A scan following a round-roi-like pattern.",
+    "is_scan": true
+   },
+   {
+    "name": "round_scan",
+    "description": "A scan following a round shell-like pattern with increasing number of points in each ring. The scan starts at the inner ring and moves outwards.",
+    "is_scan": true
+   },
+   {
+    "name": "time_scan",
+    "description": "Trigger and readout devices at a fixed interval.",
+    "is_scan": true
+   },
+   {
+    "name": "umv",
+    "description": "Simple move command that moves one or more motors to the specified positions.",
+    "is_scan": false
+   }
+  ]
+ },
+ "truncated": false
+}

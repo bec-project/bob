@@ -1,0 +1,51 @@
+{
+ "ok": true,
+ "summary": "5 documentation pages match 'line scan'; the best is 'Run Your First Scan' (https://bec-project.github.io/bec_docs/getting-started/quick-start/04-run-your-first-scan.html).",
+ "findings": [],
+ "data": {
+  "index": "bec_docs@127f371",
+  "results": [
+   {
+    "path": "getting-started/quick-start/04-run-your-first-scan.md",
+    "title": "Run Your First Scan",
+    "heading": "1. Submit a simple line scan",
+    "url": "https://bec-project.github.io/bec_docs/getting-started/quick-start/04-run-your-first-scan.html",
+    "score": 7.429,
+    "snippet": "Run a short line scan over the simulated samx motor: Run a line scan with the `samx` motor scans.line_scan(dev.samx, -1, 1, steps=5, exp_time=0.1, relative=False) This runs a scan where the samx motor is moved from the position -1 to 1, and..."
+   },
+   {
+    "path": "references/bec-core/important-commands.md",
+    "title": "Important BEC commands",
+    "heading": "Built-in line magics",
+    "url": "https://bec-project.github.io/bec_docs/references/bec-core/important-commands.html",
+    "score": 7.05,
+    "snippet": "The BEC IPython client registers the following line magics: Magic Use --- --- %abort Abort the active scan. %reset Reset the scan queue. %deferred_pause Request a queue pause after the current scan. This is only useful when scans are queued..."
+   },
+   {
+    "path": "getting-started/quick-start/05-plot-your-first-waveform.md",
+    "title": "Plot your first waveform",
+    "heading": "5. Run a scan",
+    "url": "https://bec-project.github.io/bec_docs/getting-started/quick-start/05-plot-your-first-waveform.html",
+    "score": 6.873,
+    "snippet": "Now we run a line scan in the CLI and watch the waveform update live with incoming points. scans.line_scan(dev.samx, -5, 5, steps=10, exp_time=0.1, relative=False) Waveform during scan What you have learned You used the startup gui object t..."
+   },
+   {
+    "path": "getting-started/next-steps/access-scan-data.md",
+    "title": "Access Scan Data",
+    "heading": "0. Run a scan",
+    "url": "https://bec-project.github.io/bec_docs/getting-started/next-steps/access-scan-data.html",
+    "score": 6.181,
+    "snippet": "For an intro to running scans, see the example linked above. We will use the scan from that example, but assign it to a variable in our console: scan_report = scans.line_scan(dev.samx, -1, 1, steps=5, exp_time=0.1, relative=False)"
+   },
+   {
+    "path": "how-to/scans/open-bec-hdf5-files-with-silx.md",
+    "title": "Open BEC HDF5 Files with silx",
+    "heading": "1. Find the scan file",
+    "url": "https://bec-project.github.io/bec_docs/how-to/scans/open-bec-hdf5-files-with-silx.html",
+    "score": 6.014,
+    "snippet": "If you just ran the scan, copy the file path from the File: line in the scan report. If you are looking up an older scan, use the scan history first: scan = bec.history[-1] scan Printing the scan container shows a summary that includes the..."
+   }
+  ]
+ },
+ "truncated": false
+}
