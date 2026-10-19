@@ -25,6 +25,9 @@ Open the returned URL. Treat the connection output as a credential. Ctrl-C remov
 container; sessions remain in the home volume. For host-only access, set
 `container.bind_address = "127.0.0.1"` (the default accepts connections on all interfaces).
 
+With `--shared`, every program of a user shares one bob: the first one starts it, the others
+attach, and it stops after the last one is gone. See [shared mode](launcher/container_manager/README.md#shared-mode).
+
 ## Repository layout
 
 | Path | What it holds |

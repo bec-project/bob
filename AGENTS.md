@@ -37,6 +37,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `launcher/container_manager/runtime.go` — subprocess execution, cancellation, and failure classification
 - `launcher/cmd/container_manager/config.go` — TOML loading and relative paths
 - `launcher/cmd/container_manager/main.go` — arguments, signals, and connection output
+- `launcher/cmd/container_manager/shared.go` — `--shared` consumers and the per-user broker that runs one
+  Manager for all of them
 - `containers/network.py` and `containers/entrypoint.sh` — firewall bootstrap and privilege dropping
 - `containers/Dockerfile` and `containers/opencode.json` — image and OpenCode configuration
 - `launcher/container_manager/lifecycle_test.go` — fake engine and cleanup regression tests
@@ -70,6 +72,9 @@ If you change:
   update `deploy/bob.example.toml` and the configuration table when public settings change.
 - `launch.go`: check Docker and Podman argument generation, identities, security options, mount
   flags, and helper commands. Preserve values without shell interpolation.
+- `shared.go`: test leases (two consumers, one start), teardown after the last consumer and the
+  linger time, start failures reaching every consumer, cancellation before Stop, and the
+  one-broker lock; run the shared tests repeatedly with `-race -count=5`.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
   retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
 - `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,
