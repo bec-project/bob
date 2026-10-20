@@ -75,9 +75,14 @@ export interface State extends SessionData {
   /** Loads a sub-agent's chat so its messages show (and update) under its task call. */
   watchSession(id: string): void;
   setNotice(text: string): void;
+  /** Asks OpenCode to connect to an MCP server again, then reloads every server's status. */
+  reconnectMcp(name: string): Promise<void>;
 }
 
 let stopEvents: (() => void) | null = null;
+let mcpTimer: ReturnType<typeof setInterval> | undefined;
+/** How often the MCP servers' status is asked again while connected. */
+const MCP_POLL_MS = 20_000;
 let resyncTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
 function parseModel(value: string | undefined): ModelRef | undefined {
@@ -170,6 +175,17 @@ export const useStore = create<State>((set, get) => {
     }, 300);
   };
 
+  // The servers' status changes without an event when one drops or comes back, so it is asked again
+  // every few seconds while connected.
+  const refreshMcp = (api: OpencodeApi) => {
+    void api
+      .mcpStatus()
+      .then((mcp) => {
+        if (get().api === api) set({ mcpStatus: mcp });
+      })
+      .catch(() => undefined);
+  };
+
   const refreshLists = async (api: OpencodeApi) => {
     const [sessions, status, permissions, questions] = await Promise.all([
       api.sessions(),
@@ -200,6 +216,7 @@ export const useStore = create<State>((set, get) => {
     async connect(connection) {
       stopEvents?.();
       stopEvents = null;
+      clearInterval(mcpTimer);
       const api = new OpencodeApi(connection);
       set({ ...emptySessionData, phase: "connecting", connectError: undefined, api, connection });
       try {
@@ -234,9 +251,11 @@ export const useStore = create<State>((set, get) => {
           void loadMessages(latest.id);
           void loadExtras(latest.id);
         }
+        mcpTimer = setInterval(() => refreshMcp(api), MCP_POLL_MS);
         stopEvents = followEvents(api, {
           onEvent(event) {
             if (get().api !== api) return;
+            if (event.type === "mcp.tools.changed") refreshMcp(api);
             const before = get();
             const after = applyEvent(before, event);
             if (after !== before) set(after);
@@ -249,7 +268,7 @@ export const useStore = create<State>((set, get) => {
             if (!reconnected) return;
             void refreshLists(api).catch(fail);
             for (const id of Object.keys(get().messages)) void loadMessages(id);
-            void api.mcpStatus().then((mcp) => set({ mcpStatus: mcp })).catch(() => undefined);
+            refreshMcp(api);
           },
           onState(stream, detail) {
             if (get().api === api) set({ stream, streamDetail: detail });
@@ -302,6 +321,7 @@ export const useStore = create<State>((set, get) => {
     disconnect() {
       stopEvents?.();
       stopEvents = null;
+      clearInterval(mcpTimer);
       for (const timer of Object.values(resyncTimers)) clearTimeout(timer);
       resyncTimers = {};
       set({
@@ -374,6 +394,14 @@ export const useStore = create<State>((set, get) => {
       } catch (error) {
         fail(error);
       }
+    },
+
+    async reconnectMcp(name) {
+      const api = get().api;
+      if (!api) return;
+      set((s) => ({ mcpStatus: { ...s.mcpStatus, [name]: { status: "connecting" } } }));
+      await api.mcpConnect(name).catch(fail);
+      refreshMcp(api);
     },
 
     setNotice(text) {

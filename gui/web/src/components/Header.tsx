@@ -135,6 +135,48 @@ function ChatTools() {
   );
 }
 
+const MCP_STATES: Record<string, { tone: string; text: string }> = {
+  connected: { tone: "ok", text: "connected" },
+  connecting: { tone: "warn pulse", text: "connecting…" },
+  disabled: { tone: "", text: "switched off in OpenCode's configuration" },
+  failed: { tone: "error", text: "cannot connect" },
+  needs_auth: { tone: "warn", text: "needs authorization" },
+  needs_client_registration: { tone: "warn", text: "needs client registration" },
+};
+
+/**
+ * One chip per MCP server OpenCode uses (bob.toml's [mcp.*]), coloured by its state. A chip of a
+ * server that is not connected connects it again when clicked.
+ */
+function McpStatusChips() {
+  const status = useStore((s) => s.mcpStatus);
+  const reconnect = useStore((s) => s.reconnectMcp);
+  const names = Object.keys(status).sort();
+  if (names.length === 0) return null;
+  return (
+    <div className="mcp-chips">
+      {names.map((name) => {
+        const entry = status[name];
+        const known = MCP_STATES[entry.status] ?? { tone: "warn", text: entry.status };
+        const retry = entry.status !== "connected" && entry.status !== "connecting" && entry.status !== "disabled";
+        const detail = `MCP server ${name}: ${known.text}${entry.error ? ` (${entry.error})` : ""}`;
+        return (
+          <button
+            key={name}
+            className={`mcp-chip ${known.tone.split(" ")[0]}`}
+            title={retry ? `${detail}. Click to connect again.` : detail}
+            disabled={!retry}
+            onClick={() => void reconnect(name)}
+          >
+            <span className={`dot ${known.tone}`} />
+            {name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Header() {
   const session = useStore((s) => (s.currentId ? s.sessions[s.currentId] : undefined));
   const sidebar = useStore((s) => s.prefs.sidebar);
@@ -146,6 +188,7 @@ export function Header() {
       </button>
       <div className="title">{session ? session.title || "Untitled" : "New chat"}</div>
       <div className="controls">
+        <McpStatusChips />
         <ChatTools />
         <AgentPicker />
         <ModelPicker />

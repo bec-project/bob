@@ -569,6 +569,37 @@ kbd {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.mcp-chips {
+  display: flex;
+  gap: 6px;
+}
+.mcp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.mcp-chip:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.mcp-chip.error {
+  border-color: var(--error);
+  color: var(--error);
+}
+.mcp-chip.warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.mcp-chip:hover:not(:disabled) {
+  background: var(--surface-3);
+}
 
 .usage {
   display: flex;

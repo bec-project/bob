@@ -190,6 +190,11 @@ export class OpencodeApi {
     return this.request<Record<string, McpStatus>>("GET", "/mcp");
   }
 
+  /** Asks OpenCode to connect to one of its MCP servers again. */
+  mcpConnect(name: string) {
+    return this.request<boolean>("POST", `/mcp/${encodeURIComponent(name)}/connect`);
+  }
+
   permissions() {
     return this.request<PermissionRequest[]>("GET", "/permission");
   }
