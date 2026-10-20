@@ -78,7 +78,8 @@ If you change:
   flags, and helper commands. Preserve values without shell interpolation.
 - `broker.go`: test leases (two clients, one start, none before the first client), teardown after
   the last client and the linger time, a killed client ending its lease, start failures reaching
-  every client, cancellation before Stop, and the one-broker lock; run the broker tests repeatedly
+  every client, cancellation before Stop, the health watch (a stopped container ends every lease,
+  brief engine failures do not), and the one-broker lock; run the broker tests repeatedly
   with `-race -count=5`. The desktop app implements the client side (`gui/desktop/src/bob.rs`):
   keep it in step with the protocol.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
