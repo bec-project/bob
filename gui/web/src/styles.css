@@ -490,19 +490,34 @@ kbd {
   color: var(--text-3);
   flex: none;
 }
+/* The buttons float over the row's end, so showing them changes neither its height nor its layout. */
 .session-item .actions {
-  display: none;
-  gap: 2px;
-}
-.session-item:hover .actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 0 16px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: linear-gradient(to right, transparent, var(--surface-3) 14px);
+  visibility: hidden;
 }
-.session-item:hover .when {
-  display: none;
+.session-item.active .actions {
+  background: linear-gradient(to right, transparent, var(--surface) 14px);
+}
+.session-item:hover .actions,
+.session-item:focus-visible .actions {
+  visibility: visible;
+}
+.session-item:hover .when,
+.session-item:focus-visible .when {
+  visibility: hidden;
 }
 .session-item .actions .icon-btn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 .session-item input {
   flex: 1;
