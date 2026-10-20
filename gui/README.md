@@ -20,6 +20,9 @@ first GUI a user opens starts their bob, and later ones join it.
   with git, so this needs the workspace to be a git repository.
 - **Chat tools**: fork a chat (whole, or from any answer), copy it as Markdown or save it as a
   `.md` file (the desktop app saves to Downloads).
+- **Earlier prompts**: *Up* on the composer's first line shows the chat's previous prompt (in a
+  new chat, the last ones sent from this window), *Down* steps forward again and finally brings
+  back what you were typing.
 
 The GUI is a [Tauri](https://tauri.app) desktop app: a native window around the React page in
 `web/`. The page talks to OpenCode directly; the app's Rust side (`desktop/`) starts and holds

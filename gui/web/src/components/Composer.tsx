@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { promptHistory, recallStep, type Recall } from "../state/promptHistory";
 import { useStore } from "../state/store";
 import { IconSend, IconStop, IconX } from "./Icons";
 
@@ -11,15 +12,21 @@ export function Composer() {
   const request = useStore((s) => s.composer);
   const notice = useStore((s) => s.notice);
   const dismissNotice = useStore((s) => s.dismissNotice);
+  const entries = useStore((s) => (s.currentId ? s.messages[s.currentId] : undefined));
   const [text, setText] = useState("");
   const area = useRef<HTMLTextAreaElement>(null);
+  // Up and Down step through earlier prompts, like a shell; typing keeps what is shown
+  const sent = useRef<string[]>([]);
+  const [recall, setRecall] = useState<Recall>();
 
   useEffect(() => {
     area.current?.focus();
+    setRecall(undefined);
   }, [currentId]);
 
   useEffect(() => {
     if (!request) return;
+    setRecall(undefined);
     setText((current) =>
       request.replace || !current.trim() ? request.text : `${current.trimEnd()}\n${request.text}`,
     );
@@ -48,7 +55,27 @@ export function Composer() {
     const value = text.trim();
     if (!value || !ready) return;
     setText("");
+    setRecall(undefined);
+    sent.current = [...sent.current, value];
     void send(value);
+  };
+
+  /** Up on the first line or Down on the last one shows an earlier or later prompt. */
+  const step = (event: KeyboardEvent<HTMLTextAreaElement>, direction: "up" | "down") => {
+    const el = event.currentTarget;
+    if (el.selectionStart !== el.selectionEnd) return;
+    const onEdge =
+      direction === "up" ? !el.value.slice(0, el.selectionStart).includes("\n") : !el.value.slice(el.selectionEnd).includes("\n");
+    if (!onEdge) return;
+    const next = recallStep(promptHistory(entries, sent.current), recall, text, direction);
+    if (!next) return;
+    event.preventDefault();
+    setRecall(next.recall);
+    setText(next.text);
+    requestAnimationFrame(() => {
+      const target = area.current;
+      target?.setSelectionRange(target.value.length, target.value.length);
+    });
   };
 
   return (
@@ -67,9 +94,15 @@ export function Composer() {
           rows={1}
           placeholder={busy ? "Queue a follow-up…" : "Ask anything"}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+            setRecall(undefined);
+          }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+            const plain = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && !event.nativeEvent.isComposing;
+            if ((event.key === "ArrowUp" || event.key === "ArrowDown") && plain) {
+              step(event, event.key === "ArrowUp" ? "up" : "down");
+            } else if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
               submit();
             } else if (event.key === "Escape" && busy) {
@@ -93,7 +126,8 @@ export function Composer() {
         </div>
       </div>
       <div className="composer-hint">
-        <kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>Esc</kbd> stop
+        <kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>↑</kbd> earlier prompts ·{" "}
+        <kbd>Esc</kbd> stop
       </div>
     </div>
   );
