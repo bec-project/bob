@@ -14,15 +14,13 @@ cp deploy/bob.example.toml bob.toml
 
 Edit `bob.toml`: set `workspace.workdir` to your project directory outside this repository
 and `provider.base_url` to your OpenAI-compatible API. Set the model and token as needed.
-The example uses Docker and enables the browser UI.
+The example uses Docker.
 
-```sh
-go -C launcher build -o ../build/bob-manager ./cmd/container_manager
-build/bob-manager --config bob.toml
-```
-
-Open the returned URL. Treat the connection output as a credential. Ctrl-C removes the
-container; sessions remain in the home volume. For host-only access, set
+Each user has one bob, started by a client of the user's broker: the first client starts it,
+every other client of that user joins the same bob and sees the same sessions, and bob stops 90
+seconds after the last of them is gone; sessions remain in the home volume. See
+[how bob runs](launcher/container_manager/README.md#how-bob-runs) for the client protocol. Treat
+the connection a client receives as a credential. For host-only access, set
 `container.bind_address = "127.0.0.1"` (the default accepts connections on all interfaces).
 
 ## Repository layout

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,12 +11,12 @@ import (
 	"time"
 )
 
-// Run the actual CLI in a separate process group, so SIGINT models terminal Ctrl-C.
+// Run the actual broker in a separate process group, so SIGINT models an interrupt from outside.
 func TestSignalHelper(t *testing.T) {
 	if os.Getenv("BOB_SIGNAL_HELPER") != "1" {
 		return
 	}
-	os.Args = []string{"bob-manager", "--config", os.Getenv("BOB_SIGNAL_CONFIG")}
+	os.Args = []string{"bob-manager", "--broker", "--config", os.Getenv("BOB_SIGNAL_CONFIG")}
 	if err := run(); err != nil {
 		os.Stderr.WriteString(err.Error())
 		os.Exit(1)
@@ -67,13 +68,19 @@ exit 0
 	if err := os.WriteFile(config, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
+	// Unix socket paths are short; t.TempDir can exceed the limit on macOS.
+	brokerDir, err := os.MkdirTemp("", "bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(brokerDir) })
 	cmd := exec.Command(os.Args[0], "-test.run=^TestSignalHelper$")
 	fail := "0"
 	if failCleanup {
 		fail = "1"
 	}
 	cmd.Env = append(os.Environ(), "BOB_SIGNAL_HELPER=1", "BOB_SIGNAL_CONFIG="+config,
-		"BOB_SIGNAL_STATE="+directory, "BOB_SIGNAL_FAIL_CLEANUP="+fail, "PATH="+directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+		"BOB_SIGNAL_STATE="+directory, "BOB_SIGNAL_FAIL_CLEANUP="+fail, "BOB_RUNTIME_DIR="+brokerDir, "PATH="+directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
@@ -88,6 +95,17 @@ exit 0
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		}
 	})
+	// bob starts for its first client, which holds the lease through its connection.
+	socket := filepath.Join(brokerDir, brokerSocket)
+	waitForFile(t, socket)
+	client, err := net.Dial("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if _, err := client.Write([]byte(`{"consumer":"test","pid":1,"config":"bob.toml"}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
 	waitForFile(t, filepath.Join(directory, "up"))
 	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGINT); err != nil {
 		t.Fatal(err)

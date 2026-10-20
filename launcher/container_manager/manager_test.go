@@ -3,6 +3,7 @@ package containermanager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -384,5 +385,49 @@ esac
 	}
 	if strings.Contains(string(encoded), `"mcpPorts"`) {
 		t.Fatal("included MCP ports without published MCP servers")
+	}
+}
+
+func TestCheckTellsAStoppedBobFromAnUnansweredEngine(t *testing.T) {
+	engine := filepath.Join(t.TempDir(), "docker")
+	script := `#!/bin/sh
+test "$*" = "inspect --format {{.State.Running}} bob-id" || { echo "unexpected: $*" >&2; exit 2; }
+case "$BOB_TEST_CONTAINER" in
+  running) echo true ;;
+  exited) echo false ;;
+  gone) echo "Error: No such object: bob-id" >&2; exit 1 ;;
+  *) echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" >&2; exit 1 ;;
+esac
+`
+	if err := os.WriteFile(engine, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{binary: engine, name: "bob-id"}
+	for _, test := range []struct {
+		container string
+		stopped   bool
+		ok        bool
+	}{
+		{"running", false, true},
+		{"exited", true, false},
+		{"gone", true, false},
+		{"no-engine", false, false},
+	} {
+		t.Setenv("BOB_TEST_CONTAINER", test.container)
+		err := manager.Check(context.Background())
+		if (err == nil) != test.ok || errors.Is(err, ErrStopped) != test.stopped {
+			t.Errorf("%s: Check() = %v", test.container, err)
+		}
+	}
+
+	if err := (&Manager{}).Check(context.Background()); !errors.Is(err, ErrStopped) {
+		t.Errorf("Check without a container = %v", err)
+	}
+	done := make(chan struct{})
+	close(done)
+	t.Setenv("BOB_TEST_CONTAINER", "running")
+	manager.hostMCPs = []*hostMCPProcess{{name: "bec", done: done, err: errors.New("exit status 1")}}
+	if err := manager.Check(context.Background()); !errors.Is(err, ErrStopped) || !strings.Contains(err.Error(), "host MCP bec exited") {
+		t.Errorf("Check with an exited host MCP server = %v", err)
 	}
 }
