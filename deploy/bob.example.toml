@@ -1,15 +1,13 @@
 [container]
-# Run OpenCode's browser UI with "web" instead of the default headless "serve".
-# The published port serves both the UI and API. Default: false.
-web = true
 # Container engine: "docker" or "podman". Default: "podman".
 runtime = "docker"
 # Image tag to launch; build this image from ./containers first.
 # Default: "localhost/bob".
 image = "localhost/bob"
 # Named volume that preserves OpenCode's home, configuration, and sessions.
-# Default: "bob-cli-home". Shared across launches using the same volume name.
-home_volume = "bob-cli-home"
+# Default: "bob-<user name>-home", one per user, so every GUI of a user sees the same sessions
+# and users of one engine never share them. Set it to keep an older volume, such as "bob-cli-home".
+# home_volume = "bob-cli-home"
 # Optional container name. Omit to generate a unique name for each launch.
 # name = "bob"
 # OpenCode API bind address. Default: "0.0.0.0" (reachable from other hosts).
