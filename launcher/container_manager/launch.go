@@ -107,11 +107,7 @@ func getLaunchArgs(options resolvedOptions) ([]string, []string, error) {
 		name, _, _ := strings.Cut(entry, "=")
 		args = append(args, "--env", name)
 	}
-	serverCommand := "serve"
-	if options.Web {
-		serverCommand = "web"
-	}
-	args = append(args, options.Image, serverCommand, "--hostname", "0.0.0.0", "--port", "4096")
+	args = append(args, options.Image, "serve", "--hostname", "0.0.0.0", "--port", "4096")
 	return args, environment, nil
 }
 
