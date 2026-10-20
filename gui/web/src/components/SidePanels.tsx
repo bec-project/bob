@@ -2,11 +2,26 @@ import type { ReactNode } from "react";
 import { useStore } from "../state/store";
 import { ChangesPanel } from "./ChangesPanel";
 import { IconFile, IconX } from "./Icons";
+import { useResizable } from "./Splitter";
 
-function PanelFrame({ title, icon, width, children }: { title: string; icon: ReactNode; width?: number; children: ReactNode }) {
+function PanelFrame({
+  id,
+  title,
+  icon,
+  width: initial = 340,
+  children,
+}: {
+  id: string;
+  title: string;
+  icon: ReactNode;
+  width?: number;
+  children: ReactNode;
+}) {
   const setPrefs = useStore((s) => s.setPrefs);
+  const { width, splitter } = useResizable(`panel:${id}`, initial, "left", 280);
   return (
-    <aside className="panel" style={width ? { width } : undefined}>
+    <aside className="panel" style={{ width }}>
+      {splitter}
       <div className="panel-head">
         {icon}
         <span className="grow">{title}</span>
@@ -32,7 +47,7 @@ export function SidePanels() {
   return (
     <>
       {open === CHANGES.key && (
-        <PanelFrame title={CHANGES.title} icon={CHANGES.icon} width={460}>
+        <PanelFrame id={CHANGES.key} title={CHANGES.title} icon={CHANGES.icon} width={460}>
           <ChangesPanel />
         </PanelFrame>
       )}

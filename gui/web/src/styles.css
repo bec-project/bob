@@ -417,6 +417,7 @@ kbd {
 }
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 264px;
@@ -1094,6 +1095,7 @@ details[open] > summary .chev {
   background: var(--surface-2);
 }
 .panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 340px;
@@ -1116,6 +1118,40 @@ details[open] > summary .chev {
 .panel-body {
   flex: 1;
   overflow-y: auto;
+}
+/* A drag handle along the edge of the sidebar or a side panel. */
+.splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.splitter.left {
+  left: -4px;
+}
+.splitter.right {
+  right: -4px;
+}
+.splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.splitter:hover::after,
+body.resizing .splitter::after {
+  background: var(--accent);
+}
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 /* ---------- settings dialog ---------- */

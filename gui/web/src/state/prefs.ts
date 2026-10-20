@@ -10,6 +10,8 @@ export interface Prefs {
   /** Whether to let the model think before answering, where the model can switch it off. */
   thinking: boolean;
   agent?: string;
+  /** Widths set by dragging a splitter, by element ("sidebar", or a side panel's key). */
+  widths: Record<string, number>;
   /** The side panel that is open. */
   panel?: string;
   sidebar: boolean;
@@ -21,6 +23,7 @@ export const defaultPrefs: Prefs = {
   theme: "system",
   thinking: true,
   sidebar: true,
+  widths: {},
 };
 
 export function loadPrefs(): Prefs {

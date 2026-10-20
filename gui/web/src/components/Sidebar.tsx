@@ -4,6 +4,7 @@ import { sortedSessions } from "../state/sessionData";
 import { useStore } from "../state/store";
 import { dayGroup, relativeTime, useNow } from "./hooks";
 import { IconEdit, IconLogo, IconPlus, IconSettings, IconTrash } from "./Icons";
+import { useResizable } from "./Splitter";
 
 function SessionRow({ session, active }: { session: Session; active: boolean }) {
   const busy = useStore((s) => s.status[session.id]?.type === "busy" || s.status[session.id]?.type === "retry");
@@ -92,6 +93,7 @@ export function Sidebar({ onSettings }: { onSettings: () => void }) {
   const connection = useStore((s) => s.connection);
   const version = useStore((s) => s.serverVersion);
   const [query, setQuery] = useState("");
+  const { width, splitter } = useResizable("sidebar", 264, "right", 200);
   useNow(true, 30_000);
 
   const groups = useMemo(() => {
@@ -112,7 +114,8 @@ export function Sidebar({ onSettings }: { onSettings: () => void }) {
     stream === "open" ? "Connected" : stream === "retrying" ? "Reconnecting…" : stream === "connecting" ? "Connecting…" : "Offline";
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={{ width }}>
+      {splitter}
       <div className="sidebar-head">
         <span className="brand">
           <IconLogo size={20} /> bob
