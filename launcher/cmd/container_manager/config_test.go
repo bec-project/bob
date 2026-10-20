@@ -28,7 +28,6 @@ func TestOptionsLoadConfigAndResolvePaths(t *testing.T) {
 	path := writeConfig(t, `
 [container]
 runtime = "docker"
-web = true
 image = "custom-image"
 home_volume = "custom-home"
 name = "custom-name"
@@ -53,7 +52,7 @@ url = "http://host.docker.internal:19000/mcp"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !input.Web || input.Runtime != "docker" || input.Image != "custom-image" || input.HomeVolume != "custom-home" || input.Name != "custom-name" {
+	if input.Runtime != "docker" || input.Image != "custom-image" || input.HomeVolume != "custom-home" || input.Name != "custom-name" {
 		t.Fatalf("lost container configuration: %+v", input)
 	}
 	if input.Workdir != filepath.Join(filepath.Dir(path), "working") || len(input.ReadWrite) != 2 || input.ReadWrite[0] != filepath.Join(filepath.Dir(path), "repo") || input.ReadWrite[1] != filepath.Join(filepath.Dir(path), "other") || len(input.ReadOnly) != 2 || input.ReadOnly[0] != filepath.Join(filepath.Dir(path), "notes") || input.ReadOnly[1] != "/absolute/data" {
@@ -80,7 +79,7 @@ base_url = "http://example.invalid/v1"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Web || input.Runtime != "podman" || input.Image != "localhost/bob" || input.HomeVolume != "bob-cli-home" || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || len(input.MCPServers) != 0 || len(input.ReadWrite) != 0 || input.ContextLimit != 0 || input.OutputLimit != 0 {
+	if input.Runtime != "podman" || input.Image != "localhost/bob" || input.HomeVolume != containermanager.DefaultOptions().HomeVolume || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || len(input.MCPServers) != 0 || len(input.ReadWrite) != 0 || input.ContextLimit != 0 || input.OutputLimit != 0 {
 		t.Fatal("incorrect defaults")
 	}
 }
@@ -112,6 +111,13 @@ workdir = "/repo"
 ro = ["/notes"]
 trailing`,
 		`workspace = "/repo"`,
+		// OpenCode's own browser UI is gone: bob's GUI is the only one.
+		`[container]
+web = true
+[workspace]
+workdir = "/repo"
+[provider]
+base_url = "http://example.invalid/v1"`,
 		`{"workspace": "/repo"}`,
 	} {
 		path := writeConfig(t, content)

@@ -2,8 +2,10 @@ package containermanager
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -266,5 +268,16 @@ func TestModelLimitDefaultsOutput(t *testing.T) {
 		if context, output := input.modelLimit(); context != test.wantContext || output != test.wantOutput {
 			t.Errorf("limits (%d, %d) resolved to (%d, %d), want (%d, %d)", test.context, test.output, context, output, test.wantContext, test.wantOutput)
 		}
+	}
+}
+
+func TestDefaultHomeVolumeBelongsToTheUser(t *testing.T) {
+	volume := DefaultOptions().HomeVolume
+	if !resourceName.MatchString(volume) || !strings.HasPrefix(volume, "bob-") || !strings.HasSuffix(volume, "-home") {
+		t.Fatalf("default home volume %q is not a per-user volume name", volume)
+	}
+	if current, err := user.Current(); err == nil && current.Username != "" && resourceName.MatchString(current.Username) &&
+		volume != "bob-"+current.Username+"-home" {
+		t.Fatalf("default home volume %q does not name user %s", volume, current.Username)
 	}
 }
