@@ -10,7 +10,8 @@ package main
 // {"connection": {...}, "config": "<its bob.toml>", "consumers": <n>} or {"error": "<text>"}
 // once bob is up. A client holds its lease for as long as it keeps the connection open, so a
 // client that crashes ends its lease with it. The linger time after the last lease ends, the
-// broker stops bob and exits.
+// broker stops bob and exits. It also checks that bob still runs: once its container stopped or
+// is gone, the broker closes every lease, cleans up and exits, so the next client starts a new bob.
 
 import (
 	"bufio"
@@ -45,9 +46,22 @@ const (
 // firstClientWait bounds a broker whose starting client never connected; tests shorten it.
 var firstClientWait = 30 * time.Second
 
+// healthInterval is how often the broker checks that bob still runs; tests shorten it.
+var healthInterval = 5 * time.Second
+
+const (
+	healthTimeout = 10 * time.Second
+	// healthFailures checks in a row that the engine could not answer count as bob gone: with no
+	// engine (Docker Desktop quit, say) its containers are gone too.
+	healthFailures = 6
+)
+
 // lifecycle is the part of containermanager.Manager the broker uses.
 type lifecycle interface {
 	Start(ctx context.Context, options containermanager.Options) (containermanager.Connection, error)
+	// Check returns nil while bob runs, an error wrapping containermanager.ErrStopped once it
+	// does not, and another error when the engine could not tell.
+	Check(ctx context.Context) error
 	Stop(ctx context.Context) error
 }
 
@@ -117,6 +131,7 @@ type broker struct {
 	ready      chan struct{} // closed when Start returned
 	connection containermanager.Connection
 	startErr   error
+	watched    chan struct{} // closed when the health watch ended; nil when bob did not start
 
 	mu        sync.Mutex
 	started   bool // Start was called, by the first client
@@ -162,11 +177,48 @@ func (b *broker) start() {
 		b.logf("bob did not start: %v", b.startErr)
 	} else {
 		b.logf("bob is up as %s at %s", b.connection.Container, b.connection.URL)
+		b.watched = make(chan struct{})
+		go b.watch(b.watched)
 	}
 	close(b.ready)
 	if b.startErr != nil {
 		// clients already waiting get the error; then there is nothing to serve
 		time.AfterFunc(time.Second, b.requestStop)
+	}
+}
+
+// watch checks that bob still runs until the broker stops, and stops the broker once bob is gone:
+// its clients then see their leases end, and the next client starts a new bob.
+func (b *broker) watch(done chan<- struct{}) {
+	defer close(done)
+	ticker := time.NewTicker(healthInterval)
+	defer ticker.Stop()
+	failures := 0
+	for {
+		select {
+		case <-b.stop:
+			return
+		case <-ticker.C:
+		}
+		ctx, cancel := context.WithTimeout(b.startCtx, healthTimeout)
+		err := b.manager.Check(ctx)
+		cancel()
+		switch {
+		case err == nil:
+			failures = 0
+			continue
+		case errors.Is(err, containermanager.ErrStopped):
+			b.logf("%v; ending every lease", err)
+		default:
+			failures++
+			b.logf("cannot check bob (%d of %d): %v", failures, healthFailures, err)
+			if failures < healthFailures {
+				continue
+			}
+			b.logf("the engine did not answer %d checks in a row; ending every lease", failures)
+		}
+		b.requestStop()
+		return
 	}
 }
 
@@ -203,9 +255,12 @@ func (b *broker) serve(ctx context.Context, listener net.Listener) error {
 	if !started {
 		return nil
 	}
-	// Calls to one Manager are serialized: wait for Start before Stop.
+	// Calls to one Manager are serialized: wait for Start and the last Check before Stop.
 	cancelStart()
 	<-b.ready
+	if b.watched != nil {
+		<-b.watched
+	}
 	err := b.manager.Stop(context.Background())
 	if err != nil {
 		b.logf("cleanup failed: %v", err)

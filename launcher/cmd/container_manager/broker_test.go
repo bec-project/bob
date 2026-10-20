@@ -21,14 +21,39 @@ import (
 	"bob/container_manager"
 )
 
-// fakeLifecycle stands in for the Manager: it counts starts and stops and can block or fail.
+// fakeLifecycle stands in for the Manager: it counts starts, checks and stops, and can block or
+// fail; checks return checkErr.
 type fakeLifecycle struct {
-	mu      sync.Mutex
-	starts  int
-	stops   int
-	block   bool
-	failure error
-	running bool
+	mu       sync.Mutex
+	starts   int
+	checks   int
+	stops    int
+	block    bool
+	failure  error
+	checkErr error
+	running  bool
+}
+
+func (f *fakeLifecycle) Check(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.stops > 0 {
+		panic("Check after Stop")
+	}
+	f.checks++
+	return f.checkErr
+}
+
+func (f *fakeLifecycle) setCheck(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.checkErr = err
+}
+
+func (f *fakeLifecycle) checkCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.checks
 }
 
 func (f *fakeLifecycle) Start(ctx context.Context, _ containermanager.Options) (containermanager.Connection, error) {
@@ -220,6 +245,85 @@ func TestClientDuringLingerKeepsBob(t *testing.T) {
 	}
 	again.Close()
 	waitFor(t, "bob to stop", func() bool { _, stops := manager.counts(); return stops == 1 })
+}
+
+// fastHealthChecks makes the broker check bob every interval during a test.
+func fastHealthChecks(t *testing.T, interval time.Duration) {
+	t.Helper()
+	previous := healthInterval
+	healthInterval = interval
+	t.Cleanup(func() { healthInterval = previous })
+}
+
+func TestBrokerEndsEveryLeaseWhenBobStops(t *testing.T) {
+	fastHealthChecks(t, 10*time.Millisecond)
+	manager := &fakeLifecycle{}
+	run := startBroker(t, manager, time.Minute)
+	_, first, err := consume(t, run.socket, "gui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	_, second, err := consume(t, run.socket, "widgets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	waitFor(t, "health checks", func() bool { return manager.checkCount() >= 3 })
+	manager.setCheck(fmt.Errorf("%w: its container is gone", containermanager.ErrStopped))
+	select {
+	case err := <-run.done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the broker kept serving a bob whose container is gone")
+	}
+	for _, conn := range []net.Conn{first, second} {
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		if _, err := conn.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+			t.Fatalf("a lease outlived bob: %v", err)
+		}
+	}
+	if starts, stops := manager.counts(); starts != 1 || stops != 1 {
+		t.Fatalf("starts=%d stops=%d", starts, stops)
+	}
+}
+
+func TestBrokerOutlastsBriefEngineFailures(t *testing.T) {
+	// slow enough that a good check comes back long before the limit of failures in a row
+	fastHealthChecks(t, 25*time.Millisecond)
+	manager := &fakeLifecycle{}
+	run := startBroker(t, manager, time.Minute)
+	_, conn, err := consume(t, run.socket, "gui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// failures add up to more than the limit, but never that many in a row: bob stays
+	for round := 0; round < 3; round++ {
+		manager.setCheck(errors.New("Cannot connect to the Docker daemon"))
+		checked := manager.checkCount()
+		waitFor(t, "failing checks", func() bool { return manager.checkCount() >= checked+2 })
+		manager.setCheck(nil)
+		checked = manager.checkCount()
+		waitFor(t, "a good check", func() bool { return manager.checkCount() >= checked+2 })
+	}
+	select {
+	case <-run.done:
+		t.Fatal("the broker stopped bob over a few failed checks")
+	default:
+	}
+	// an engine that stays away counts as bob gone
+	manager.setCheck(errors.New("Cannot connect to the Docker daemon"))
+	select {
+	case <-run.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the broker kept serving while the engine did not answer")
+	}
+	if _, stops := manager.counts(); stops != 1 {
+		t.Fatal("no cleanup after the engine went away")
+	}
 }
 
 func TestStartFailureReachesEveryClient(t *testing.T) {
