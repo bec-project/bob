@@ -20,6 +20,9 @@ import (
 
 var resourceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
+// pluginName is how GUIs name their plugins.
+var pluginName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+
 // MCPServer configures an HTTP(S) MCP endpoint, optionally launched on the host.
 type MCPServer struct {
 	// Port optionally publishes a container TCP port on host loopback.
@@ -27,6 +30,8 @@ type MCPServer struct {
 	URL  string
 	// HostCommand starts a foreground HTTP MCP server outside the container.
 	HostCommand []string
+	// Plugin names the GUI plugin that adds views for this server's tools; empty for none.
+	Plugin string
 }
 
 type Options struct {
@@ -159,6 +164,12 @@ func (server MCPServer) validate() error {
 	}
 	if server.Port == 0 && server.URL == "" {
 		return errors.New("MCP server requires url or a published port")
+	}
+	if server.Plugin != "" && !pluginName.MatchString(server.Plugin) {
+		return errors.New("plugin must be a lowercase name such as bec")
+	}
+	if server.Plugin != "" && server.URL == "" {
+		return errors.New("plugin requires url")
 	}
 	if len(server.HostCommand) > 0 {
 		if server.URL == "" {

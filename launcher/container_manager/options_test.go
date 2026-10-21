@@ -165,6 +165,9 @@ func TestNamedMCPValidation(t *testing.T) {
 		{"bad\x00name", MCPServer{URL: "http://example.invalid/mcp"}},
 		{"bec_mcp", MCPServer{}},
 		{"bec_mcp", MCPServer{URL: "ftp://example.invalid/mcp"}},
+		{"bec_mcp", MCPServer{URL: "http://example.invalid/mcp", Plugin: "Bec"}},
+		{"bec_mcp", MCPServer{URL: "http://example.invalid/mcp", Plugin: "../bec"}},
+		{"bec_mcp", MCPServer{Port: 19000, Plugin: "bec"}},
 	} {
 		input := DefaultOptions()
 		input.BaseURL = "http://example.invalid/v1"
@@ -179,7 +182,7 @@ func TestNamedMCPValidation(t *testing.T) {
 	if err := input.validate(); err != nil {
 		t.Fatal(err)
 	}
-	input.MCPServers = map[string]MCPServer{"bec_mcp": {URL: "http://example.invalid/mcp"}}
+	input.MCPServers = map[string]MCPServer{"bec_mcp": {URL: "http://example.invalid/mcp", Plugin: "bec"}}
 	if err := input.validate(); err != nil {
 		t.Fatal(err)
 	}

@@ -242,6 +242,7 @@ base_url = "http://example.invalid/v1"
 [mcp.bec_mcp]
 port = 19000
 url = "http://mcp.example:8000/mcp"
+plugin = "bec"
 [mcp.other_tools]
 url = "https://tools.example/mcp"
 `)
@@ -250,7 +251,7 @@ url = "https://tools.example/mcp"
 		t.Fatal(err)
 	}
 	want := map[string]containermanager.MCPServer{
-		"bec_mcp":     {Port: 19000, URL: "http://mcp.example:8000/mcp"},
+		"bec_mcp":     {Port: 19000, URL: "http://mcp.example:8000/mcp", Plugin: "bec"},
 		"other_tools": {URL: "https://tools.example/mcp"},
 	}
 	if !reflect.DeepEqual(input.MCPServers, want) {
@@ -267,6 +268,7 @@ func TestMCPConfigRejectsUnknownFieldsAndWrongTypes(t *testing.T) {
 		"[mcp.bec_mcp]\ncommand = [\"python3\"]",
 		"[mcp]\nport = 19000",
 		"[mcp]\nurl = \"http://mcp.example/mcp\"",
+		"[mcp.bec_mcp]\nurl = \"http://mcp.example/mcp\"\nplugin = 1",
 	} {
 		path := writeConfig(t, "[workspace]\nworkdir = \"/repo\"\n[provider]\nbase_url = \"http://example.invalid/v1\"\n"+content)
 		if _, err := loadConfig(path); err == nil {

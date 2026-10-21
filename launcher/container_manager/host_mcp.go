@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -43,6 +44,29 @@ func hostMCPAddress(server MCPServer) (string, error) {
 		}
 	}
 	return net.JoinHostPort(host, port), nil
+}
+
+// hostMCPURL is where this machine reaches an MCP server whose URL is written for the container:
+// the host's names in the container become loopback, and the container's own loopback becomes
+// the server's published port, when it has one.
+func hostMCPURL(server MCPServer, published string) string {
+	endpoint, err := url.Parse(server.URL)
+	if err != nil {
+		return server.URL
+	}
+	switch endpoint.Hostname() {
+	case "host.docker.internal", "host.containers.internal":
+		if port := endpoint.Port(); port != "" {
+			endpoint.Host = net.JoinHostPort("127.0.0.1", port)
+		} else {
+			endpoint.Host = "127.0.0.1"
+		}
+	case "localhost", "127.0.0.1", "::1":
+		if published != "" {
+			endpoint.Host = strings.Replace(published, "0.0.0.0:", "127.0.0.1:", 1)
+		}
+	}
+	return endpoint.String()
 }
 
 func (m *Manager) startHostMCPs(ctx context.Context, servers map[string]MCPServer) error {
