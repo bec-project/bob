@@ -280,12 +280,98 @@ func TestBrokerEndsEveryLeaseWhenBobStops(t *testing.T) {
 		t.Fatal("the broker kept serving a bob whose container is gone")
 	}
 	for _, conn := range []net.Conn{first, second} {
-		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		if _, err := conn.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
-			t.Fatalf("a lease outlived bob: %v", err)
+		if reason := stoppedThenClosed(t, conn); reason != "bob stopped: its container is gone" {
+			t.Fatalf("a client was told %q", reason)
 		}
 	}
 	if starts, stops := manager.counts(); starts != 1 || stops != 1 {
+		t.Fatalf("starts=%d stops=%d", starts, stops)
+	}
+}
+
+// stoppedThenClosed reads what a lease gets when bob stops: why, then the end of the connection.
+func stoppedThenClosed(t *testing.T, conn net.Conn) string {
+	t.Helper()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	reader := bufio.NewReader(conn)
+	line, err := reader.ReadBytes('\n')
+	if err != nil {
+		t.Fatalf("the lease ended without saying why: %v", err)
+	}
+	var reply brokerReply
+	if err := json.Unmarshal(line, &reply); err != nil {
+		t.Fatalf("unexpected line %q: %v", line, err)
+	}
+	if _, err := reader.ReadByte(); !errors.Is(err, io.EOF) {
+		t.Fatalf("a lease outlived bob: %v", err)
+	}
+	return reply.Stopped
+}
+
+func TestClientStopsBobForEveryone(t *testing.T) {
+	manager := &fakeLifecycle{}
+	run := startBroker(t, manager, time.Minute)
+	_, first, err := consume(t, run.socket, "gui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	_, second, err := consume(t, run.socket, "widgets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+
+	conn, err := net.Dial("unix", run.socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	request := hello{Consumer: "bob-gui", PID: os.Getpid(), Stop: true, Reason: "restarted with /etc/other.toml"}
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
+		t.Fatal(err)
+	}
+	if reason := stoppedThenClosed(t, conn); reason != "restarted with /etc/other.toml" {
+		t.Fatalf("the stopping client was told %q", reason)
+	}
+	for _, lease := range []net.Conn{first, second} {
+		if reason := stoppedThenClosed(t, lease); reason != "restarted with /etc/other.toml" {
+			t.Fatalf("a client was told %q", reason)
+		}
+	}
+	select {
+	case err := <-run.done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the broker kept running after a client stopped bob")
+	}
+	if starts, stops := manager.counts(); starts != 1 || stops != 1 {
+		t.Fatalf("starts=%d stops=%d", starts, stops)
+	}
+}
+
+func TestStopWithoutBobJustEndsTheBroker(t *testing.T) {
+	manager := &fakeLifecycle{}
+	run := startBroker(t, manager, time.Minute)
+	conn, err := net.Dial("unix", run.socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := json.NewEncoder(conn).Encode(hello{Consumer: "bob-gui", Stop: true}); err != nil {
+		t.Fatal(err)
+	}
+	if reason := stoppedThenClosed(t, conn); reason != "bob was stopped by bob-gui" {
+		t.Fatalf("the stopping client was told %q", reason)
+	}
+	select {
+	case <-run.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the broker kept running")
+	}
+	if starts, stops := manager.counts(); starts != 0 || stops != 0 {
 		t.Fatalf("starts=%d stops=%d", starts, stops)
 	}
 }
@@ -364,10 +450,10 @@ func TestInterruptCancelsStartupBeforeStopping(t *testing.T) {
 	if _, stops := manager.counts(); stops != 1 {
 		t.Fatal("cleanup did not run after the cancelled startup")
 	}
-	// the waiting consumer learns that bob is gone: its connection closes, or, when the
-	// broker read its hello only after stopping began, it gets an error reply
+	// the waiting consumer learns that bob is gone: its connection closes, it is told why bob
+	// stopped, or, when the broker read its hello only after stopping began, it gets an error reply
 	line, err := bufio.NewReader(conn).ReadBytes('\n')
-	if err == nil && !strings.Contains(string(line), `"error"`) {
+	if err == nil && !strings.Contains(string(line), `"error"`) && !strings.Contains(string(line), `"stopped"`) {
 		t.Fatalf("consumer got a connection from a stopping broker: %s", line)
 	}
 }
