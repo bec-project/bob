@@ -88,16 +88,18 @@ and prints one JSON line, `{"socket": "<path>"}`. The client then connects to th
 one JSON line `{"consumer": "<name>", "pid": <pid>, "config": "<absolute bob.toml>"}` and reads
 one line back once bob is up: `{"connection": {...}, "config": "...", "consumers": <n>}` or
 `{"error": "..."}`. A bob that is already running keeps its own configuration; the reply's
-`config` names it. The client holds its lease for as long as it keeps the connection open, so
-quitting or crashing ends the lease too. The broker starts bob for the first client and, once
-the last lease has been gone for `--linger` (default 90 s, so reopening a GUI keeps bob), stops
-it the usual way, removing the container, and exits. A broker that no client joins exits without
-starting bob. While bob runs, the broker checks every 5 seconds that its container still runs
-and its host MCP servers are alive. Once the container stopped or is gone (an engine restart, an
-out-of-memory kill), a host MCP server exited, or the engine has not answered six checks in a
-row, the broker closes every lease, cleans up and exits, so clients learn that bob stopped and
-the next one starts a new bob. Clients that only use a running bob, such as background services,
-should connect to the socket and not start a broker.
+`config` names it; a client that wants another bob.toml first sends `{"stop": true, "reason":
+"<text>"}`, which stops bob for every client and ends the broker, and then joins again. The
+client holds its lease for as long as it keeps the connection open, so quitting or crashing ends
+the lease too. The broker starts bob for the first client and, once the last lease has been gone
+for `--linger` (default 90 s, so reopening a GUI keeps bob), stops it the usual way, removing
+the container, and exits. A broker that no client joins exits without starting bob. While bob
+runs, the broker checks every 5 seconds that its container still runs and its host MCP servers
+are alive. Once the container stopped or is gone (an engine restart, an out-of-memory kill), a
+host MCP server exited, or the engine has not answered six checks in a row, the broker closes
+every lease, cleans up and exits; every client that holds bob first gets `{"stopped": "<why>"}`,
+so it learns that bob stopped and the next one starts a new bob. Clients that only use a running
+bob, such as background services, should connect to the socket and not start a broker.
 
 The broker is the same executable run with `--broker`, detached in its own session so closing the
 client that started it does not reach it. Its socket, lock and log (`broker.log`) live in a

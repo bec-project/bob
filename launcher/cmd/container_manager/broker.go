@@ -9,7 +9,9 @@ package main
 // bob.toml>"}. The broker starts bob for the first client and answers every client with
 // {"connection": {...}, "config": "<its bob.toml>", "consumers": <n>} or {"error": "<text>"}
 // once bob is up. A client holds its lease for as long as it keeps the connection open, so a
-// client that crashes ends its lease with it. The linger time after the last lease ends, the
+// client that crashes ends its lease with it. A client can also send {"stop": true, "reason":
+// "<text>"} instead, to stop bob for every client (to start it again with another bob.toml, say).
+// When bob stops while clients hold it, each gets {"stopped": "<why>"} before its lease closes. The linger time after the last lease ends, the
 // broker stops bob and exits. It also checks that bob still runs: once its container stopped or
 // is gone, the broker closes every lease, cleans up and exits, so the next client starts a new bob.
 
@@ -69,6 +71,9 @@ type hello struct {
 	Consumer string `json:"consumer"`
 	PID      int    `json:"pid"`
 	Config   string `json:"config"`
+	// Stop asks the broker to stop bob for every client and exit; Reason tells the others why.
+	Stop   bool   `json:"stop,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type brokerReply struct {
@@ -76,6 +81,8 @@ type brokerReply struct {
 	Config     string                       `json:"config,omitempty"`
 	Consumers  int                          `json:"consumers,omitempty"`
 	Error      string                       `json:"error,omitempty"`
+	// Stopped says why bob stopped, to clients that held it, and to the client that stopped it.
+	Stopped string `json:"stopped,omitempty"`
 }
 
 // runtimeDir is the private per-user directory holding the broker's socket, lock and log.
@@ -140,6 +147,8 @@ type broker struct {
 	idle      *time.Timer
 	stop      chan struct{}
 	stopOnce  sync.Once
+	// why bob stops, for the clients that hold it; written before stop closes
+	stopReason string
 }
 
 func newBroker(manager lifecycle, options containermanager.Options, config string, linger time.Duration, log io.Writer) *broker {
@@ -155,8 +164,12 @@ func (b *broker) logf(format string, args ...any) {
 	fmt.Fprintf(b.log, "%s bob broker: %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
 }
 
-func (b *broker) requestStop() {
-	b.stopOnce.Do(func() { close(b.stop) })
+// requestStop stops the broker once; reason, when not empty, tells the clients that hold bob why.
+func (b *broker) requestStop(reason string) {
+	b.stopOnce.Do(func() {
+		b.stopReason = reason
+		close(b.stop)
+	})
 }
 
 func (b *broker) shutdownIfIdle() {
@@ -165,7 +178,7 @@ func (b *broker) shutdownIfIdle() {
 	defer b.mu.Unlock()
 	if b.consumers == 0 {
 		b.logf("no client left; stopping")
-		b.requestStop()
+		b.requestStop("")
 	}
 }
 
@@ -183,7 +196,7 @@ func (b *broker) start() {
 	close(b.ready)
 	if b.startErr != nil {
 		// clients already waiting get the error; then there is nothing to serve
-		time.AfterFunc(time.Second, b.requestStop)
+		time.AfterFunc(time.Second, func() { b.requestStop("") })
 	}
 }
 
@@ -203,12 +216,14 @@ func (b *broker) watch(done chan<- struct{}) {
 		ctx, cancel := context.WithTimeout(b.startCtx, healthTimeout)
 		err := b.manager.Check(ctx)
 		cancel()
+		reason := ""
 		switch {
 		case err == nil:
 			failures = 0
 			continue
 		case errors.Is(err, containermanager.ErrStopped):
 			b.logf("%v; ending every lease", err)
+			reason = err.Error()
 		default:
 			failures++
 			b.logf("cannot check bob (%d of %d): %v", failures, healthFailures, err)
@@ -216,8 +231,9 @@ func (b *broker) watch(done chan<- struct{}) {
 				continue
 			}
 			b.logf("the engine did not answer %d checks in a row; ending every lease", failures)
+			reason = "bob stopped: the container engine stopped answering"
 		}
-		b.requestStop()
+		b.requestStop(reason)
 		return
 	}
 }
@@ -241,12 +257,16 @@ func (b *broker) serve(ctx context.Context, listener net.Listener) error {
 	case <-b.stop:
 	case <-ctx.Done():
 		b.logf("interrupted; stopping")
-		b.requestStop()
+		b.requestStop("bob stopped: its broker was interrupted")
 	}
 	b.idle.Stop()
 	_ = listener.Close()
 	b.mu.Lock()
 	for conn := range b.open {
+		if b.stopReason != "" {
+			_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
+			_ = json.NewEncoder(conn).Encode(brokerReply{Stopped: b.stopReason})
+		}
 		_ = conn.Close()
 	}
 	// A client that has not counted itself by now sees the stop and starts nothing.
@@ -280,6 +300,16 @@ func (b *broker) handle(conn net.Conn) {
 		return // `bob-manager` checking that the broker answers, or not a client
 	}
 	_ = conn.SetReadDeadline(time.Time{})
+	if greeting.Stop {
+		reason := greeting.Reason
+		if reason == "" {
+			reason = fmt.Sprintf("bob was stopped by %s", greeting.Consumer)
+		}
+		b.logf("client %q (pid %d) stops bob: %s", greeting.Consumer, greeting.PID, reason)
+		b.requestStop(reason)
+		_ = json.NewEncoder(conn).Encode(brokerReply{Stopped: reason})
+		return
+	}
 
 	b.mu.Lock()
 	select {
