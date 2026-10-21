@@ -144,6 +144,8 @@ public:
     // Undoes a user message and everything after it, workspace files included.
     Q_INVOKABLE void revert(const QString &messageID);
     Q_INVOKABLE void unrevert();
+    // Puts text into the composer and focuses it, without sending (for plugins).
+    Q_INVOKABLE void insertPrompt(const QString &text);
     // Copies the open chat up to (not including) messageID into a new chat and opens it.
     Q_INVOKABLE void fork(const QString &messageID);
     // Asks OpenCode to connect to an MCP server again, then reloads every server's status.

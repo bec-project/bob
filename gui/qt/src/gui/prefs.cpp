@@ -100,6 +100,30 @@ QVariantMap Prefs::widths() const
     return widths;
 }
 
+QVariantMap Prefs::plugins() const
+{
+    // an INI file gives the switches back as text
+    QVariantMap switches = m_settings.value(QStringLiteral("plugins")).toMap();
+    for (auto it = switches.begin(); it != switches.end(); ++it)
+        it.value() = it.value().toBool();
+    return switches;
+}
+
+void Prefs::setPlugins(const QVariantMap &plugins)
+{
+    write(QStringLiteral("plugins"), plugins.isEmpty() ? QVariant() : QVariant(plugins));
+}
+
+QVariantMap Prefs::pluginSettings() const
+{
+    return m_settings.value(QStringLiteral("pluginSettings")).toMap();
+}
+
+void Prefs::setPluginSettings(const QVariantMap &settings)
+{
+    write(QStringLiteral("pluginSettings"), settings.isEmpty() ? QVariant() : QVariant(settings));
+}
+
 void Prefs::setWidth(const QString &key, int width)
 {
     QVariantMap all = widths();

@@ -14,4 +14,5 @@ endfunction()
 
 bob_test(tst_bobsession bobcore)
 bob_test(tst_chatclient bobcore)
+bob_test(tst_mcp bobcore)
 bob_test(tst_logic bobbackend)
