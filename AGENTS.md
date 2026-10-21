@@ -77,7 +77,8 @@ If you change:
 - `broker.go`: test leases (two clients, one start, none before the first client), teardown after
   the last client and the linger time, a killed client ending its lease, start failures reaching
   every client, cancellation before Stop, the health watch (a stopped container ends every lease,
-  brief engine failures do not), and the one-broker lock; run the broker tests repeatedly
+  brief engine failures do not), a client's stop request and the reason every lease gets, and the
+  one-broker lock; run the broker tests repeatedly
   with `-race -count=5`. Keep clients in step with the protocol; the Qt app implements the client
   side in `gui/qt/src/bob/bobsession.cpp`.
 - `gui/qt/`: build and run the unit tests (`cmake --build build/qt && (cd build/qt &&
