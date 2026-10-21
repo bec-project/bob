@@ -115,6 +115,18 @@ Item {
                         }
                     }
                 }
+                // each plugin instance's panels
+                Repeater {
+                    model: PluginRegistry.panels
+                    delegate: IconButton {
+                        required property var modelData
+                        iconName: modelData.icon
+                        iconSize: 18
+                        tip: modelData.title
+                        active: Prefs.panel === modelData.key
+                        onClicked: Prefs.panel = active ? "" : modelData.key
+                    }
+                }
             }
         }
     }
@@ -138,12 +150,23 @@ Item {
     // the open side panel: left of the rail, or at the window's right edge when it floats
     Item {
         id: panels
-        readonly property bool open: changes.visible
+        // the panel that is open, if any
+        readonly property Item current: {
+            if (changes.visible)
+                return changes
+            for (let i = 0; i < pluginPanels.count; ++i) {
+                const panel = pluginPanels.itemAt(i)
+                if (panel && panel.visible)
+                    return panel
+            }
+            return null
+        }
+        readonly property bool open: current !== null
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right
         anchors.rightMargin: view.narrow ? 0 : view.railWidth
-        width: changes.visible ? changes.width : 0
+        width: current ? current.width : 0
         z: 2
 
         ChangesPanel {
@@ -151,6 +174,28 @@ Item {
             visible: Prefs.panel === "core/changes"
             height: parent.height
             width: view.narrow ? view.floatingWidth : size
+        }
+        // the plugins' panels
+        Repeater {
+            id: pluginPanels
+            model: PluginRegistry.panels
+            delegate: PanelFrame {
+                id: panel
+                required property var modelData
+                visible: Prefs.panel === modelData.key
+                height: panels.height
+                width: view.narrow ? view.floatingWidth : size
+                key: modelData.key
+                title: modelData.title
+                iconName: modelData.icon
+                initial: modelData.width
+                Loader {
+                    anchors.fill: parent
+                    active: panel.visible
+                    sourceComponent: panel.modelData.component
+                    onLoaded: item.context = PluginRegistry.context(panel.modelData.instance)
+                }
+            }
         }
     }
     Shade {

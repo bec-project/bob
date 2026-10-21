@@ -372,7 +372,12 @@ void ThreadModel::addPart(QList<Row> &rows, const Input &input, const QJsonObjec
                      {QStringLiteral("output"), text.output},
                      {QStringLiteral("outputLabel"), status == QStringLiteral("error") ? QStringLiteral("Error") : QStringLiteral("Output")},
                      {QStringLiteral("child"), child},
-                     {QStringLiteral("expanded"), explicitly(id, waiting || (!child.isEmpty() && running))}},
+                     {QStringLiteral("expanded"), explicitly(id, waiting || (!child.isEmpty() && running))},
+                     // whether the user opened or closed it, so a plugin's card may open it by default
+                     {QStringLiteral("expandedSet"), input.expanded && input.expanded->contains(id)},
+                     // for plugins: the call as OpenCode reports it
+                     {QStringLiteral("rawInput"), inputObject.toVariantMap()},
+                     {QStringLiteral("rawOutput"), str(state, "output")}},
                     undone);
     } else if (type == QStringLiteral("patch")) {
         QStringList names;

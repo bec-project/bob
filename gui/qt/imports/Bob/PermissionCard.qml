@@ -11,6 +11,11 @@ RequestCard {
     property bool answering: false
     // the keys that allow this request once, on the oldest request only (see Requests.qml)
     property string shortcut: ""
+    // how the plugin serving the tool's MCP server words the request, if one does
+    readonly property var custom: {
+        PluginRegistry.revision
+        return PluginRegistry.enabled.length ? PluginRegistry.permissionView(request) ?? {} : {}
+    }
 
     function answer(reply) {
         answering = true
@@ -37,7 +42,7 @@ RequestCard {
         }
         Text {
             Layout.fillWidth: true
-            text: card.request.title
+            text: card.custom.title ?? card.request.title
             color: Theme.text
             font.pixelSize: 14
             font.weight: Font.DemiBold
@@ -51,8 +56,20 @@ RequestCard {
         color: Theme.text3
         font.pixelSize: 13
     }
+    // a plugin's own view of the request
+    Loader {
+        active: !!card.custom.body
+        visible: active
+        Layout.fillWidth: true
+        sourceComponent: card.custom.body ? card.custom.body.component : null
+        onLoaded: {
+            const properties = card.custom.body.properties || {}
+            for (const key in properties)
+                item[key] = properties[key]
+        }
+    }
     Rectangle {
-        visible: card.request.detail !== ""
+        visible: !card.custom.body && (card.custom.text ?? card.request.detail) !== ""
         Layout.fillWidth: true
         implicitHeight: Math.min(200, detail.implicitHeight + 16)
         radius: Theme.radiusSmall
@@ -67,7 +84,7 @@ RequestCard {
             TextEdit {
                 id: detail
                 width: parent.width
-                text: card.request.detail
+                text: card.custom.text ?? card.request.detail
                 readOnly: true
                 selectByMouse: true
                 wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere

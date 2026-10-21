@@ -4,8 +4,9 @@ import Bob.Backend
 
 // A new chat: what bob can do, and a few prompts to start with.
 Item {
-    readonly property var suggestions: [qsTr("What can you do?"), qsTr("Summarise the files in the workspace"),
-                                        qsTr("Explain the project layout")]
+    // the plugins' prompts when any plugin offers some
+    readonly property var suggestions: PluginRegistry.suggestions.length ? PluginRegistry.suggestions
+        : [qsTr("What can you do?"), qsTr("Summarise the files in the workspace"), qsTr("Explain the project layout")]
 
     ColumnLayout {
         anchors.centerIn: parent
