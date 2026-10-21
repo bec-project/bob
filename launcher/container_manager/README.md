@@ -61,6 +61,11 @@ The CLI reads `bob.toml`, or `--config PATH`. See
   Connection JSON now returns `mcpPorts`, a map of server names to published host
   addresses, replacing the former single `mcpPort` field. It is omitted when no MCP
   ports are published.
+  Optional `mcp.<name>.plugin` names the GUI plugin for that server's tools (a lowercase name
+  such as `bec`; it requires `url`). Connection JSON's `mcpServers` maps every server with a
+  URL to `{"url", "plugin"}`, where `url` is how this machine reaches it: `host.docker.internal`
+  and `host.containers.internal` become `127.0.0.1`, and the container's loopback becomes the
+  server's published port.
 - **Access:** OpenCode serves its API (`serve`) on a generated host port with a generated
   password; bob's GUI is its user interface. The default bind address is `0.0.0.0`;
   use `127.0.0.1` for host-only access. Remote access needs the host's reachable address

@@ -30,6 +30,15 @@ type Connection struct {
 	Workspace string `json:"workspace"`
 	// MCPPorts maps MCP server names to their published host addresses.
 	MCPPorts map[string]string `json:"mcpPorts,omitempty"`
+	// MCPServers tells clients where this machine reaches each MCP server that has a URL, and
+	// which GUI plugin serves it.
+	MCPServers map[string]MCPEndpoint `json:"mcpServers,omitempty"`
+}
+
+// MCPEndpoint is one MCP server as clients on this machine reach it.
+type MCPEndpoint struct {
+	URL    string `json:"url"`
+	Plugin string `json:"plugin,omitempty"`
 }
 
 func (m *Manager) Start(parent context.Context, input Options) (connection Connection, startErr error) {
@@ -294,6 +303,16 @@ func getConnection(ctx context.Context, options resolvedOptions) (Connection, er
 			connection.MCPPorts = map[string]string{}
 		}
 		connection.MCPPorts[name] = strings.Split(address, "\n")[0]
+	}
+	for _, name := range mcpServerNames(options.MCPServers) {
+		server := options.MCPServers[name]
+		if server.URL == "" {
+			continue
+		}
+		if connection.MCPServers == nil {
+			connection.MCPServers = map[string]MCPEndpoint{}
+		}
+		connection.MCPServers[name] = MCPEndpoint{URL: hostMCPURL(server, connection.MCPPorts[name]), Plugin: server.Plugin}
 	}
 	return connection, nil
 }

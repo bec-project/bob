@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -374,6 +375,9 @@ esac
 	if !strings.Contains(string(encoded), `"mcpPorts":{`) || strings.Contains(string(encoded), `"mcpPort":`) {
 		t.Fatal("connection JSON does not use named MCP ports")
 	}
+	if len(connection.MCPServers) != 1 || connection.MCPServers["remote_only"].URL != "https://example.invalid/mcp" {
+		t.Fatalf("servers without a URL got an endpoint: %+v", connection.MCPServers)
+	}
 	options.MCPServers = nil
 	connection, err = getConnection(context.Background(), options)
 	if err != nil {
@@ -429,6 +433,47 @@ esac
 	manager.hostMCPs = []*hostMCPProcess{{name: "bec", done: done, err: errors.New("exit status 1")}}
 	if err := manager.Check(context.Background()); !errors.Is(err, ErrStopped) || !strings.Contains(err.Error(), "host MCP bec exited") {
 		t.Errorf("Check with an exited host MCP server = %v", err)
+	}
+}
+
+func TestConnectionTellsWhereTheHostReachesEachMCPServer(t *testing.T) {
+	root := t.TempDir()
+	binary := filepath.Join(root, "engine")
+	script := `#!/bin/sh
+case "$3" in
+  4096/tcp) echo 0.0.0.0:40000 ;;
+  19000/tcp) echo 0.0.0.0:40001 ;;
+  *) exit 1 ;;
+esac
+`
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	input := DefaultOptions()
+	input.Name = "owned-container"
+	input.MCPServers = map[string]MCPServer{
+		"bec_mcp": {URL: "http://host.docker.internal:8000/mcp", Plugin: "bec"},
+		"bec_dev": {URL: "http://host.containers.internal:8015/mcp", Plugin: "bec"},
+		"inside":  {URL: "http://localhost:19000/mcp", Port: 19000},
+		"remote":  {URL: "https://mcp.example/tools"},
+	}
+	options := resolvedOptions{Options: input, binary: binary, mounts: []mount{{path: "/workspace"}}}
+	connection, err := getConnection(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]MCPEndpoint{
+		"bec_mcp": {URL: "http://127.0.0.1:8000/mcp", Plugin: "bec"},
+		"bec_dev": {URL: "http://127.0.0.1:8015/mcp", Plugin: "bec"},
+		"inside":  {URL: "http://127.0.0.1:40001/mcp"},
+		"remote":  {URL: "https://mcp.example/tools"},
+	}
+	if !reflect.DeepEqual(connection.MCPServers, want) {
+		t.Fatalf("mcpServers = %+v", connection.MCPServers)
+	}
+	encoded, err := json.Marshal(connection.MCPServers["inside"])
+	if err != nil || string(encoded) != `{"url":"http://127.0.0.1:40001/mcp"}` {
+		t.Fatalf("an endpoint without a plugin encodes as %s", encoded)
 	}
 }
 
