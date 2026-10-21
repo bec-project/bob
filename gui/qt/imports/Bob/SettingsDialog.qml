@@ -133,14 +133,26 @@ Dialog {
                         }
                     }
                 }
-                AppButton {
+                RowLayout {
                     Layout.topMargin: 12
-                    text: dialog.held ? qsTr("Leave this bob") : qsTr("Switch bob…")
-                    variant: dialog.held ? "danger" : "default"
-                    tip: dialog.held ? qsTr("End this app's hold on %1; its chats stay in its home folder").arg(Bob.status.name) : ""
-                    onClicked: {
-                        dialog.close()
-                        Chat.leaveBob()
+                    spacing: 8
+                    AppButton {
+                        text: dialog.held ? qsTr("Leave this bob") : qsTr("Switch bob…")
+                        variant: dialog.held ? "danger" : "default"
+                        tip: dialog.held ? qsTr("End this app's hold on %1; its chats stay in its home folder").arg(Bob.status.name) : ""
+                        onClicked: {
+                            dialog.close()
+                            Chat.leaveBob()
+                        }
+                    }
+                    AppButton {
+                        visible: dialog.held && Bob.status.runningConfig !== Bob.status.config
+                        text: qsTr("Restart with %1").arg(Desktop.fileName(Bob.status.config ?? ""))
+                        tip: qsTr("Stop bob for every app that holds it and start it with %1").arg(Bob.status.config ?? "")
+                        onClicked: {
+                            dialog.close()
+                            Chat.restartBob()
+                        }
                     }
                 }
                 Text {
@@ -152,7 +164,7 @@ Dialog {
                             return ""
                         let line = qsTr("This app holds your bob, started with %1. Leaving ends its hold and goes back to the connect screen; bob stops 90 seconds after no app holds it.").arg(Bob.status.runningConfig)
                         if (Bob.status.runningConfig !== Bob.status.config)
-                            line += " " + qsTr("This app asked for %1, but another program had started bob first.").arg(Bob.status.config)
+                            line += " " + qsTr("This app asked for %1; bob already ran with the other one, so the app joined that.").arg(Bob.status.config)
                         return line
                     }
                     color: Theme.text3
