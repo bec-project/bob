@@ -52,8 +52,15 @@ jobs:
     if: needs.check_pr_status.outputs.branch-pr == ''
     uses: ./.github/workflows/gui.yml
 
+  desktop:
+    needs: [check_pr_status, formatter]
+    if: needs.check_pr_status.outputs.branch-pr == ''
+    uses: ./.github/workflows/desktop.yml
+    with:
+      version: 0.0.0
+
   release:
-    needs: [formatter, unit-test, network-test, container-test, binaries, gui]
+    needs: [formatter, unit-test, network-test, container-test, binaries, gui, desktop]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write

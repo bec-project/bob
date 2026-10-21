@@ -57,3 +57,32 @@ jobs:
     with:
       ref: ${{ github.sha }}
       version: ${{ needs.release.outputs.version }}
+
+  desktop:
+    needs: release
+    if: needs.release.outputs.release_available == 'true'
+    uses: ./.github/workflows/desktop.yml
+    with:
+      ref: ${{ github.sha }}
+      version: ${{ needs.release.outputs.version }}
+
+  desktop-publish:
+    needs: [release, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: dist
+      - name: Deliver the desktop app to Gitea and the GitHub release
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
+        run: bash ci/publish_desktop.sh "$VERSION" dist

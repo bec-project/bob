@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=bob
+Comment=Chat with the OpenCode assistant that bob runs in a container
+Exec=bob-gui
+Icon=ch.psi.bob
+Categories=Development;
+Terminal=false

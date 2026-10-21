@@ -336,9 +336,9 @@ fn is_executable(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// The bob executable to use when the user has not chosen one: $BOB_BIN, the build in this
-/// source tree (build/bob-manager, which `npm run bob` builds), or `bob` on the PATH. A Flatpak
-/// uses the host's `bob-manager`.
+/// The bob executable to use when the user has not chosen one: $BOB_BIN, the bob-manager that a
+/// release bundle carries beside the app, the build in this source tree (build/bob-manager,
+/// which `npm run bob` builds), or `bob` on the PATH. A Flatpak uses the host's `bob-manager`.
 pub fn default_binary() -> Option<String> {
     if in_flatpak() {
         return Some("bob-manager".into());
@@ -347,6 +347,12 @@ pub fn default_binary() -> Option<String> {
         if is_executable(&path) {
             return Some(path.display().to_string());
         }
+    }
+    if let Some(path) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| bundled_binary(&exe))
+    {
+        return Some(path.display().to_string());
     }
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for candidate in [repo.join("build/bob-manager"), repo.join("bob")] {
@@ -358,6 +364,13 @@ pub fn default_binary() -> Option<String> {
         }
     }
     find_in_path("bob").map(|p| p.display().to_string())
+}
+
+/// bob-manager beside the app's executable, where the macOS release puts it (the .app's
+/// Contents/MacOS).
+fn bundled_binary(exe: &Path) -> Option<PathBuf> {
+    let candidate = exe.parent()?.join("bob-manager");
+    is_executable(&candidate).then_some(candidate)
 }
 
 /// bob.toml beside the source tree, when the app runs from one and the file exists.
@@ -582,7 +595,7 @@ fn hello(stream: &UnixStream, config: &str) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{host_command, list, running_bob, BobSession, BobStatus};
+    use super::{bundled_binary, host_command, list, running_bob, BobSession, BobStatus};
     use serde_json::json;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::os::unix::fs::PermissionsExt;
@@ -633,6 +646,18 @@ mod tests {
         assert!(args[2].starts_with("--env=PATH="));
         assert_eq!(args[3..], ["--directory=/home/me/bec", "bob-manager"]);
         assert_eq!(host.get_current_dir(), None);
+    }
+
+    #[test]
+    fn finds_the_bob_manager_bundled_beside_the_app() {
+        let dir = temp_dir("bundled");
+        let exe = dir.join("bob");
+        assert_eq!(bundled_binary(&exe), None);
+        let manager = dir.join("bob-manager");
+        std::fs::write(&manager, "").unwrap();
+        assert_eq!(bundled_binary(&exe), None, "not executable");
+        std::fs::set_permissions(&manager, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(bundled_binary(&exe), Some(manager));
     }
 
     fn temp_dir(name: &str) -> PathBuf {

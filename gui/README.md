@@ -52,9 +52,10 @@ again. When bob already runs with another bob.toml, started by another program, 
 that bob and says so.
 
 The connect screen sets the bob.toml and the bob executable. The executable defaults to
-`$BOB_BIN`, then `build/bob-manager` of the source tree the app was built from (`npm run bob`
-builds it), then `bob` on the PATH; the bob.toml defaults to the one at the root of that source
-tree. The app keeps these choices in its own settings file, `settings.json` in its config folder
+`$BOB_BIN`, then the `bob-manager` that the macOS release carries beside the app, then
+`build/bob-manager` of the source tree the app was built from (`npm run bob` builds it), then
+`bob` on the PATH (the Flatpak uses the host's `bob-manager`); the bob.toml defaults to the one at
+the root of that source tree. The app keeps these choices in its own settings file, `settings.json` in its config folder
 (`~/Library/Application Support/ch.psi.bob` on macOS, `~/.config/ch.psi.bob` on Linux), so it
 can start bob before the page loads; the page keeps only look and layout. The screen also lists
 every running bob container on Docker or Podman; connecting to one of those does not hold it. To
@@ -62,6 +63,29 @@ read such a container's OpenCode password the app uses `docker inspect`, which o
 can already control the engine can do. *Connect by hand…* takes a connection (URL and password)
 of a bob running elsewhere. Settings → *Leave this bob* (or *Switch bob…*, when the app holds
 none) goes back to that screen.
+
+## Released bundles
+
+Each bob release also carries the desktop app, built by
+[`desktop.yml`](../.github/workflows/desktop.yml), on the GitHub release and in Gitea (package
+`bob`).
+
+- `bob-desktop_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with `bob-manager` inside
+  the app, which uses it unless another executable is chosen. The app is signed ad hoc, not with
+  a developer certificate, so macOS blocks its first start: allow it under System Settings →
+  Privacy & Security → *Open Anyway*, or run `xattr -dr com.apple.quarantine /Applications/bob.app`.
+- `bob-desktop_<version>_linux_amd64.flatpak`: Linux, RHEL 9 included. Tauri 2 needs WebKitGTK
+  4.1, which RHEL 9 does not have; the Flatpak's GNOME runtime (from Flathub) brings it.
+  bob-manager and Docker/Podman stay on the host, installed separately: the app runs them there
+  through `flatpak-spawn --host` and defaults to `bob-manager` on the host's PATH.
+
+  ```sh
+  flatpak install bob-desktop_<version>_linux_amd64.flatpak   # offers to add Flathub for the runtime
+  flatpak run ch.psi.bob
+  ```
+
+  The Flatpak sees the host's files under their own paths (so a bob.toml means the same inside
+  and out), the broker's socket folder in `$XDG_RUNTIME_DIR/bob`, and the network.
 
 ## Thinking
 

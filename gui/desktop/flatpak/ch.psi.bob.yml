@@ -1,0 +1,41 @@
+# bob's desktop app as a Flatpak, for Linux systems whose own WebKitGTK is older than the 4.1
+# that Tauri 2 needs (RHEL 9). The GNOME runtime brings WebKitGTK 4.1. bob-manager and
+# Docker/Podman stay on the host: the app runs them there through flatpak-spawn.
+# ci/build_flatpak.sh puts the app's binary, built on Ubuntu, beside this file as bob-gui.
+id: ch.psi.bob
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: bob-gui
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # bob.toml and workspaces keep the host's paths, which bob-manager on the host is given
+  - --filesystem=host
+  # the broker's socket
+  - --filesystem=xdg-run/bob:create
+  # flatpak-spawn --host: bob-manager, docker, podman
+  - --talk-name=org.freedesktop.Flatpak
+modules:
+  - name: bob-gui
+    buildsystem: simple
+    sources:
+      - type: file
+        path: bob-gui
+      - type: file
+        path: ch.psi.bob.desktop
+      - type: file
+        path: ../icons/32x32.png
+      - type: file
+        path: ../icons/128x128.png
+      - type: file
+        path: ../icons/128x128@2x.png
+    build-commands:
+      - install -Dm755 bob-gui /app/bin/bob-gui
+      - install -Dm644 ch.psi.bob.desktop /app/share/applications/ch.psi.bob.desktop
+      - install -Dm644 32x32.png /app/share/icons/hicolor/32x32/apps/ch.psi.bob.png
+      - install -Dm644 128x128.png /app/share/icons/hicolor/128x128/apps/ch.psi.bob.png
+      - install -Dm644 128x128@2x.png /app/share/icons/hicolor/256x256/apps/ch.psi.bob.png

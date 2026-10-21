@@ -186,6 +186,13 @@ The checksum manifest must cover every expected binary archive exactly once. Ima
 publication is serialized; retries may publish an older version's image, but only the
 newest published stable GitHub release is promoted to the registry's `latest` tag.
 
+The desktop app follows once delivery has succeeded: CI builds an arm64 macOS DMG and a Linux
+Flatpak on the GNOME runtime, which brings the WebKitGTK 4.1 that RHEL 9 lacks. They go into the
+same Gitea package (`bob/<version>`) and then onto the GitHub release, with
+`bob-desktop_<version>_SHA256SUMS`. A retry of the same run accepts the identical files in
+Gitea; a new build whose files differ from Gitea's fails before GitHub. Full CI builds the same
+files on every push without publishing them.
+
 A retry also recovers interrupted GitHub publication for an existing tag on the tested
 commit. Missing releases are recreated as drafts; incomplete drafts keep their release
 notes and receive a freshly rebuilt, verified asset set before publication. Published
