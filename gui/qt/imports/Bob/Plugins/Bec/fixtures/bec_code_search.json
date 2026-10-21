@@ -1,0 +1,46 @@
+{
+ "ok": true,
+ "summary": "3 lines contain 'not within limits' in 2 files under bec, ophyd_devices.",
+ "findings": [
+  "Info: The first match is in SimPositioner.check_value; read the code around it. Next: bec_code_read(path=\"ophyd_devices/ophyd_devices/sim/sim_positioner.py\", line=174)."
+ ],
+ "data": {
+  "text": "not within limits",
+  "matches": [
+   {
+    "file": "ophyd_devices/ophyd_devices/sim/sim_positioner.py",
+    "line": 174,
+    "text": "raise LimitError(f\"position={value} not within limits {self.limits}\")",
+    "in": "SimPositioner.check_value"
+   },
+   {
+    "file": "bec/bec_server/tests/tests_device_server/test_device_instructions.py",
+    "line": 98,
+    "text": "error_message=\"position=-5000 not within limits (-50, 50)\",",
+    "in": "test_device_server_set"
+   },
+   {
+    "file": "bec/bec_server/tests/tests_device_server/test_device_instructions.py",
+    "line": 99,
+    "text": "compact_error_message=\"position=-5000 not within limits (-50, 50)\",",
+    "in": "test_device_server_set"
+   }
+  ],
+  "files_read": 478,
+  "findings": [
+   {
+    "severity": "info",
+    "code": "search_match",
+    "subject": "ophyd_devices/ophyd_devices/sim/sim_positioner.py",
+    "next": {
+     "tool": "bec_code_read",
+     "args": {
+      "path": "ophyd_devices/ophyd_devices/sim/sim_positioner.py",
+      "line": 174
+     }
+    }
+   }
+  ]
+ },
+ "truncated": false
+}

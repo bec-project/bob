@@ -1,0 +1,70 @@
+{
+ "ok": true,
+ "summary": "216 devices: 1 computed_signal, 8 devices, 160 positioners, 47 signals. Showing 1-100. Call again with offset=100 for more.",
+ "findings": [],
+ "data": {
+  "total": 216,
+  "offset": 0,
+  "returned": 5,
+  "next_offset": 100,
+  "by_type": {
+   "computed_signal": 1,
+   "device": 8,
+   "positioner": 160,
+   "signal": 47
+  },
+  "devices": [
+   {
+    "name": "aptrx",
+    "type": "positioner",
+    "device_class": "ophyd_devices.SimPositioner",
+    "enabled": true,
+    "readout_priority": "baseline",
+    "tags": [
+     "beamline"
+    ]
+   },
+   {
+    "name": "aptry",
+    "type": "positioner",
+    "device_class": "ophyd_devices.SimPositioner",
+    "enabled": true,
+    "readout_priority": "baseline",
+    "tags": [
+     "beamline"
+    ]
+   },
+   {
+    "name": "bim2x",
+    "type": "positioner",
+    "device_class": "ophyd_devices.SimPositioner",
+    "enabled": true,
+    "readout_priority": "baseline",
+    "tags": [
+     "beamline"
+    ]
+   },
+   {
+    "name": "bim2y",
+    "type": "positioner",
+    "device_class": "ophyd_devices.SimPositioner",
+    "enabled": true,
+    "readout_priority": "baseline",
+    "tags": [
+     "beamline"
+    ]
+   },
+   {
+    "name": "bm1trx",
+    "type": "positioner",
+    "device_class": "ophyd_devices.SimPositioner",
+    "enabled": true,
+    "readout_priority": "baseline",
+    "tags": [
+     "beamline"
+    ]
+   }
+  ]
+ },
+ "truncated": true
+}

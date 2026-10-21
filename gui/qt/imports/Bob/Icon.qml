@@ -37,7 +37,9 @@ Item {
             + "M6 7v2a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V7M12 13v4",
         "download": "M12 4v11M7 10l5 5 5-5M5 20h14",
         "list": "M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01",
-        "compress": "M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"
+        "compress": "M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5",
+        "chip": "M8 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zM9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4",
+        "queue": "M4 6h16M4 12h16M4 18h10"
     })
 
     implicitWidth: size

@@ -1,0 +1,173 @@
+{
+ "ok": true,
+ "summary": "Log record 592 (ScanServer): bec_server.scan_server.errors.ScanAbortion raised in DirectScanWorker._handle_exception (bec/bec_server/bec_server/scan_server/direct_scan_worker.py:161); 12 of 12 frames are under the allowed source roots.",
+ "findings": [
+  "Info: This traceback chains 2 exceptions; the first was bec_server.scan_server.errors.DeviceInstructionError: An error occurred during 'set' on device 'samx'. in ScanStatus._raise_if_failed."
+ ],
+ "data": {
+  "record": {
+   "id": 592,
+   "service": "ScanServer",
+   "time": "2026-10-13T16:33:44+00:00"
+  },
+  "exception": "bec_server.scan_server.errors.ScanAbortion",
+  "exception_detail": null,
+  "frames": [
+   {
+    "frame": 0,
+    "file": "bec/bec_server/bec_server/scan_server/direct_scan_worker.py",
+    "line": 89,
+    "function": "run",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "DirectScanWorker.run",
+    "code": "    86|                     if not method:\n    87|                         raise ScanAbortion(f\"Scan is missing required method: {step}\")\n    88|                     self.check_for_interruption()\n>   89|                     method()\n    90|         except ScanAbortion as exc:\n    91|             if not self._prepare_exception_cleanup(queue, exc):\n    92|                 return"
+   },
+   {
+    "frame": 1,
+    "file": "bec/bec_server/bec_server/scan_server/scans/scan_modifier.py",
+    "line": 107,
+    "function": "wrapper",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "scan_hook.wrapper",
+    "code": "   104|     @wraps(func)\n   105|     def wrapper(self, *args, **kwargs):\n   106|         if func.__name__ not in self._scan_modifier_hooks:\n>  107|             return func(self, *args, **kwargs)\n   108| \n   109|         if self._scan_modifier is None:\n   110|             return func(self, *args, **kwargs)"
+   },
+   {
+    "frame": 2,
+    "file": "bec/bec_server/bec_server/scan_server/scans/updated_move.py",
+    "line": 138,
+    "function": "scan_core",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "UpdatedMoveScan.scan_core",
+    "code": "   135|             request_id=self.scan_info.metadata[\"RID\"],\n   136|         )\n   137| \n>  138|         self.components.move_and_wait(self.motors, target_positions)\n   139| \n   140|     @scan_hook\n   141|     def at_each_point(self):"
+   },
+   {
+    "frame": 3,
+    "file": "bec/bec_server/bec_server/scan_server/scans/scan_components.py",
+    "line": 60,
+    "function": "move_and_wait",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "ScanComponents.move_and_wait",
+    "code": "    57|             positions_to_move.append(positions[motor_index])\n    58| \n    59|         if motors_to_move:\n>   60|             self._actions.set(motors_to_move, positions_to_move, wait=True)\n    61| \n    62|     def trigger_and_read(self):\n    63|         \"\"\""
+   },
+   {
+    "frame": 4,
+    "file": "bec/bec_server/bec_server/scan_server/scans/scan_actions.py",
+    "line": 48,
+    "function": "wrapper",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "requires_scan_is_running.wrapper",
+    "code": "    45|                 f\"{method.__name__} can only be used once the scan is running. \"\n    46|                 \"Any setup or configuration should be done in the scan's prepare_scan method.\"\n    47|             )\n>   48|         return method(self, *args, **kwargs)\n    49| \n    50|     return wrapper\n    51| "
+   },
+   {
+    "frame": 5,
+    "file": "bec/bec_server/bec_server/scan_server/scans/scan_actions.py",
+    "line": 337,
+    "function": "set",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "ScanActions.set",
+    "code": "   334|             status.add_status(sub_status)\n   335| \n   336|         if wait:\n>  337|             status.wait()\n   338|         return status\n   339| \n   340|     @requires_scan_is_running"
+   },
+   {
+    "frame": 6,
+    "file": "bec/bec_server/bec_server/scan_server/scans/scan_status.py",
+    "line": 246,
+    "function": "wait",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "ScanStatus.wait",
+    "code": "   243|                 futures, timeout=increment, return_when=concurrent.futures.FIRST_EXCEPTION\n   244|             )\n   245|             for future in done:\n>  246|                 self._raise_if_failed(future)\n   247|             wait_time += increment\n   248|             if wait_time >= timeout:\n   249|                 raise TimeoutError(\"The wait operation timed out.\")"
+   },
+   {
+    "frame": 7,
+    "file": "bec/bec_server/bec_server/scan_server/scans/scan_status.py",
+    "line": 183,
+    "function": "_raise_if_failed",
+    "under_roots": true,
+    "exception_index": 0,
+    "source_check": "matches",
+    "in": "ScanStatus._raise_if_failed",
+    "code": "   175|     def _get_sub_status_done(self) -> bool:\n   176|         return (\n   177|             all(st._done for st in self._sub_status_objects) if self._sub_status_objects else True\n   178|         )\n   179| \n   180|     @staticmethod\n   181|     def _raise_if_failed(obj: concurrent.futures.Future) -> None:\n   182|         if obj.exception() is not None:\n>  183|             raise obj.exception()\n   184| \n   185|     def wait(\n   186|         self,\n   187|         min_wait: float | None = None,\n   188|         timeout: float = np.inf,\n   189|         logger_wait=5,\n   190|         resolve_on_known_type: bool = False,\n   191|     ) -> ScanStatus:"
+   },
+   {
+    "frame": 8,
+    "file": "bec/bec_server/bec_server/scan_server/scan_worker.py",
+    "line": 53,
+    "function": "run",
+    "under_roots": true,
+    "exception_index": 1,
+    "source_check": "matches",
+    "in": "ScanWorker.run",
+    "code": "    50|                         self.current_instruction_queue_item = queue\n    51|                         if self.signal_event.is_set():\n    52|                             break\n>   53|                         worker.process_instructions(queue)\n    54|                         if not queue.stopped:\n    55|                             queue.append_to_queue_history()\n    56| "
+   },
+   {
+    "frame": 9,
+    "file": "bec/bec_server/bec_server/scan_server/direct_scan_worker.py",
+    "line": 62,
+    "function": "process_instructions",
+    "under_roots": true,
+    "exception_index": 1,
+    "source_check": "matches",
+    "in": "DirectScanWorker.process_instructions",
+    "code": "    59|             logger.error(\"No scan found in the queue item to process.\")\n    60|             return\n    61| \n>   62|         self.run(scan)\n    63| \n    64|         queue.status = InstructionQueueStatus.COMPLETED\n    65|         self.worker.current_instruction_queue_item = None"
+   },
+   {
+    "frame": 10,
+    "file": "bec/bec_server/bec_server/scan_server/direct_scan_worker.py",
+    "line": 97,
+    "function": "run",
+    "under_roots": true,
+    "exception_index": 1,
+    "source_check": "matches",
+    "in": "DirectScanWorker.run",
+    "code": "    94|         except Exception as exc:\n    95|             if not self._prepare_exception_cleanup(queue, exc):\n    96|                 return\n>   97|             self._handle_exception(exc)\n    98|         finally:\n    99|             self._release_scan_locks(scan)\n   100| "
+   },
+   {
+    "frame": 11,
+    "file": "bec/bec_server/bec_server/scan_server/direct_scan_worker.py",
+    "line": 161,
+    "function": "_handle_exception",
+    "under_roots": true,
+    "exception_index": 1,
+    "source_check": "matches",
+    "in": "DirectScanWorker._handle_exception",
+    "code": "   150|     def _handle_exception(self, exc: Exception):\n   151|         content = traceback.format_exc()\n   152|         logger.error(content)\n   153| \n   154|         def _raise_alarm(error_info: messages.ErrorInfo):\n   155|             self.worker.connector.raise_alarm(\n   156|                 severity=Alarms.MAJOR, info=error_info, metadata=self.get_metadata_for_alarm()\n   157|             )\n   158| \n   159|         if isinstance(exc, DeviceInstructionError):\n   160|             _raise_alarm(error_info=exc.error_info)\n>  161|             raise ScanAbortion from exc\n   162|         error_info = messages.ErrorInfo(\n   163|             error_message=content,\n   164|             compact_error_message=traceback.format_exc(limit=0),\n   165|             exception_type=exc.__class__.__name__,\n   166|             device=None,\n   167|         )\n   168|         _raise_alarm(error_info=error_info)\n   169|         raise ScanAbortion from exc"
+   }
+  ],
+  "roots": [
+   "bec",
+   "ophyd_devices"
+  ],
+  "exceptions": [
+   {
+    "exception": "bec_server.scan_server.errors.DeviceInstructionError: An error occurred during 'set' on device 'samx'.",
+    "relation": null
+   },
+   {
+    "exception": "bec_server.scan_server.errors.ScanAbortion",
+    "relation": "cause"
+   }
+  ],
+  "findings": [
+   {
+    "severity": "info",
+    "code": "chained_exceptions",
+    "subject": "bec/bec_server/bec_server/scan_server/scans/scan_status.py",
+    "next": null
+   }
+  ]
+ },
+ "truncated": false
+}

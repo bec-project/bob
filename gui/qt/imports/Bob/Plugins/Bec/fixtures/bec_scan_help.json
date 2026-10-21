@@ -1,0 +1,107 @@
+{
+ "ok": true,
+ "summary": "line_scan: A line scan for one or more motors. Example: scans.line_scan(dev.samx, -1.0, 1.0, steps=10, relative=True)",
+ "findings": [],
+ "data": {
+  "name": "line_scan",
+  "description": "A line scan for one or more motors.",
+  "is_scan": true,
+  "arguments": [
+   {
+    "name": "device",
+    "type": "device",
+    "kind": "repeated",
+    "required": true
+   },
+   {
+    "name": "start",
+    "type": "float",
+    "kind": "repeated",
+    "required": true
+   },
+   {
+    "name": "stop",
+    "type": "float",
+    "kind": "repeated",
+    "required": true
+   },
+   {
+    "name": "steps",
+    "type": "int",
+    "kind": "keyword",
+    "required": true,
+    "constraint": "> 0",
+    "description": "steps."
+   },
+   {
+    "name": "relative",
+    "type": "bool",
+    "kind": "keyword",
+    "required": true,
+    "description": "Whether the positions are relative to the current position"
+   },
+   {
+    "name": "exp_time",
+    "type": "float",
+    "kind": "keyword",
+    "required": false,
+    "default": 0,
+    "units": "s",
+    "constraint": ">= 0",
+    "description": "Exposure time in seconds"
+   },
+   {
+    "name": "frames_per_trigger",
+    "type": "int",
+    "kind": "keyword",
+    "required": false,
+    "default": 1,
+    "constraint": ">= 1",
+    "description": "Number of frames per trigger for devices that support configurable frame counts per trigger."
+   },
+   {
+    "name": "settling_time",
+    "type": "float",
+    "kind": "keyword",
+    "required": false,
+    "default": 0,
+    "units": "s",
+    "constraint": ">= 0",
+    "description": "Time to settle before trigger and readout."
+   },
+   {
+    "name": "settling_time_after_trigger",
+    "type": "float",
+    "kind": "keyword",
+    "required": false,
+    "default": 0,
+    "units": "s",
+    "constraint": ">= 0",
+    "description": "Time to settle after the trigger but before the readout."
+   },
+   {
+    "name": "readout_time",
+    "type": "float",
+    "kind": "keyword",
+    "required": false,
+    "default": 0,
+    "units": "s",
+    "constraint": ">= 0",
+    "description": "Configuration for devices that support configurable readout times."
+   },
+   {
+    "name": "burst_at_each_point",
+    "type": "int",
+    "kind": "keyword",
+    "required": false,
+    "default": 1,
+    "constraint": ">= 1",
+    "description": "Number of triggers and readouts at each point."
+   }
+  ],
+  "example": "scans.line_scan(dev.samx, -1.0, 1.0, steps=10, relative=True)",
+  "example_note": "Values are placeholders that satisfy the argument types and bounds; set real positions, steps and times before running.",
+  "repeat": "pass (device, start, stop) as a group, at least 1 time"
+ },
+ "truncated": false
+}

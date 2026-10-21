@@ -1,0 +1,56 @@
+{
+ "ok": true,
+ "summary": "MCP server 0.1.0 is up (stdio, diagnose mode) for 0 s; 0 tool calls, 0 failed.",
+ "findings": [],
+ "data": {
+  "server": {
+   "name": "bec-mcp-server",
+   "version": "0.1.0"
+  },
+  "versions": {
+   "mcp_sdk": "2.3.0",
+   "bec_lib": "4.1.6",
+   "python": "3.14.6"
+  },
+  "transport": {
+   "kind": "stdio"
+  },
+  "mode": "diagnose",
+  "started_at": "2026-10-08T23:40:24+00:00",
+  "uptime_s": 0,
+  "bec": {
+   "state": "not_connected",
+   "redis": "localhost:6395",
+   "account": "default (bec_lib resolution)",
+   "client_age_s": null,
+   "client_max_age_s": 21600.0,
+   "client_starts": 0,
+   "calls_in_flight": 0,
+   "last_restart_reason": null,
+   "last_error": null,
+   "last_error_age_s": null
+  },
+  "tool_timeout_s": 30.0,
+  "pools": {
+   "bec": {
+    "capacity": 8,
+    "in_flight": 0
+   },
+   "docs": {
+    "capacity": 4,
+    "in_flight": 0
+   }
+  },
+  "calls": {
+   "total": 0,
+   "failed": 0
+  },
+  "recent_failures": [],
+  "docs_index": {
+   "configured": "bundled",
+   "state": "not_loaded"
+  },
+  "audit_log": "off"
+ },
+ "truncated": false
+}

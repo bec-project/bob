@@ -1,0 +1,14 @@
+module Bob.Plugins.Bec
+BecCard 1.0 BecCard.qml
+BecCodeLines 1.0 BecCodeLines.qml
+BecDevicesPanel 1.0 BecDevicesPanel.qml
+BecIncidents 1.0 BecIncidents.qml
+BecIncidentsPanel 1.0 BecIncidentsPanel.qml
+BecLogRecords 1.0 BecLogRecords.qml
+BecPlugin 1.0 BecPlugin.qml
+BecQueuePanel 1.0 BecQueuePanel.qml
+BecSettings 1.0 BecSettings.qml
+BecTraceback 1.0 BecTraceback.qml
+# Design Studio only: the app has these in C++ (beccards.h, becserver.h)
+singleton BecCards 1.0 designer/BecCards.qml
+singleton BecServer 1.0 designer/BecServer.qml

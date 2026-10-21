@@ -31,7 +31,7 @@ Remote access requires an explicit bind address and protected TLS ingress.
 | Path | What it holds |
 | --- | --- |
 | `launcher/` | Go module: the `bob-manager` CLI (`cmd/bob-manager`) and bob's sandbox manager, package `sandbox` |
-| `gui/qt/` | The desktop app (Qt 6, C++ and QML): starts and holds bob, and chats with it, with plugins for MCP servers; RPM for RHEL 9 and a macOS DMG |
+| `gui/qt/` | The desktop app (Qt 6, C++ and QML): starts and holds bob, and chats with it, with plugins for MCP servers such as BEC; RPM for RHEL 9 and a macOS DMG |
 | `deploy/` | Deployment configuration: the annotated `bob.example.toml` |
 | `ci/`, `.github/` | Release tooling and CI workflows |
 
