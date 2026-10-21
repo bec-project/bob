@@ -13,6 +13,10 @@
 //! The connect screen also lists every container with bob's `io.bob.launch` label on Docker or
 //! Podman; their OpenCode password is read back from the container's environment, which only
 //! someone who can already control the engine can do.
+//!
+//! Packaged as a Flatpak, the app has neither bob-manager nor the engines in its sandbox: it runs
+//! them on the host through `flatpak-spawn --host`, and reaches the broker's socket through the
+//! runtime folder it shares with the host.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
@@ -333,8 +337,12 @@ fn is_executable(path: &Path) -> bool {
 }
 
 /// The bob executable to use when the user has not chosen one: $BOB_BIN, the build in this
-/// source tree (build/bob-manager, which `npm run bob` builds), or `bob` on the PATH.
+/// source tree (build/bob-manager, which `npm run bob` builds), or `bob` on the PATH. A Flatpak
+/// uses the host's `bob-manager`.
 pub fn default_binary() -> Option<String> {
+    if in_flatpak() {
+        return Some("bob-manager".into());
+    }
     if let Some(path) = std::env::var_os("BOB_BIN").map(PathBuf::from) {
         if is_executable(&path) {
             return Some(path.display().to_string());
@@ -358,7 +366,49 @@ pub fn default_config() -> Option<String> {
     path.canonicalize().ok().map(|p| p.display().to_string())
 }
 
+/// Whether the app runs in a Flatpak sandbox.
+pub fn in_flatpak() -> bool {
+    Path::new("/.flatpak-info").exists()
+}
+
+/// A command that runs `program` in `dir` with the widened PATH: here, or on the host through
+/// `flatpak-spawn` when the app is a Flatpak (`--watch-bus` ends it with the app).
+fn host_command(flatpak: bool, program: &Path, dir: Option<&Path>) -> Command {
+    if !flatpak {
+        let mut command = Command::new(program);
+        command.env("PATH", engine_path());
+        if let Some(dir) = dir {
+            command.current_dir(dir);
+        }
+        return command;
+    }
+    let mut command = Command::new("flatpak-spawn");
+    command
+        .arg("--host")
+        .arg("--watch-bus")
+        .arg(format!("--env=PATH={}", engine_path()));
+    if let Some(dir) = dir {
+        command.arg(format!("--directory={}", dir.display()));
+    }
+    command.arg(program);
+    command
+}
+
+/// Flatpak creates the folder it shares for the broker's socket (`xdg-run/bob`) readable by
+/// everyone, and bob-manager only uses a private one.
+fn make_runtime_dir_private() {
+    use std::os::unix::fs::PermissionsExt;
+    if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
+        let dir = Path::new(&dir).join("bob");
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    }
+}
+
 fn engines() -> Vec<(&'static str, PathBuf)> {
+    if in_flatpak() {
+        // the host's engines cannot be seen from the sandbox; `output` skips a missing one
+        return vec![("docker", "docker".into()), ("podman", "podman".into())];
+    }
     ["docker", "podman"]
         .into_iter()
         .filter_map(|name| find_in_path(name).map(|path| (name, path)))
@@ -366,9 +416,8 @@ fn engines() -> Vec<(&'static str, PathBuf)> {
 }
 
 fn output(program: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new(program)
+    let out = host_command(in_flatpak(), program, None)
         .args(args)
-        .env("PATH", engine_path())
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
@@ -456,16 +505,19 @@ fn locate(binary: &str, config: &str, cancelled: &dyn Fn() -> bool) -> Result<St
         return Err(format!("{config} is not a file"));
     }
     let binary = Path::new(binary);
-    if !is_executable(binary) {
+    let flatpak = in_flatpak();
+    // a Flatpak cannot see the host's executables; the host reports a missing one
+    if !flatpak && !is_executable(binary) {
         return Err(format!("{} is not an executable", binary.display()));
+    }
+    if flatpak {
+        make_runtime_dir_private();
     }
     // bob resolves relative paths beside the config; host commands start in the launch directory
     let launch_dir = config_path.parent().unwrap_or(Path::new("/"));
-    let mut child = Command::new(binary)
+    let mut child = host_command(flatpak, binary, Some(launch_dir))
         .arg("--config")
         .arg(config)
-        .current_dir(launch_dir)
-        .env("PATH", engine_path())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -530,7 +582,7 @@ fn hello(stream: &UnixStream, config: &str) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{list, running_bob, BobSession, BobStatus};
+    use super::{host_command, list, running_bob, BobSession, BobStatus};
     use serde_json::json;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::os::unix::fs::PermissionsExt;
@@ -558,6 +610,29 @@ mod tests {
                 socket.display()
             ),
         )
+    }
+
+    #[test]
+    fn runs_programs_on_the_host_from_a_flatpak() {
+        let args = |command: &std::process::Command| {
+            command
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+        let dir = Path::new("/home/me/bec");
+        let here = host_command(false, Path::new("/usr/bin/bob-manager"), Some(dir));
+        assert_eq!(here.get_program(), "/usr/bin/bob-manager");
+        assert_eq!(here.get_current_dir(), Some(dir));
+        assert!(args(&here).is_empty());
+
+        let host = host_command(true, Path::new("bob-manager"), Some(dir));
+        assert_eq!(host.get_program(), "flatpak-spawn");
+        let args = args(&host);
+        assert_eq!(args[..2], ["--host", "--watch-bus"]);
+        assert!(args[2].starts_with("--env=PATH="));
+        assert_eq!(args[3..], ["--directory=/home/me/bec", "bob-manager"]);
+        assert_eq!(host.get_current_dir(), None);
     }
 
     fn temp_dir(name: &str) -> PathBuf {
