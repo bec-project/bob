@@ -50,6 +50,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
   - `launcher/container_manager/` — reusable Go package, named `containermanager`, and its tests
 - `containers/` — what bob ships as containers: the image build context, Python firewall bootstrap,
   shell entrypoint, and network tests
+- `gui/qt/` — the native desktop app (Qt 6.12, C++ and QML, CMake), which starts and holds bob and
+  chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
@@ -76,7 +78,10 @@ If you change:
   the last client and the linger time, a killed client ending its lease, start failures reaching
   every client, cancellation before Stop, the health watch (a stopped container ends every lease,
   brief engine failures do not), and the one-broker lock; run the broker tests repeatedly
-  with `-race -count=5`. Keep clients in step with the protocol.
+  with `-race -count=5`. Keep clients in step with the protocol; the Qt app implements the client
+  side in `gui/qt/src/bobsession.cpp`.
+- `gui/qt/`: build and run the unit tests (`cmake --build build/qt && (cd build/qt &&
+  QT_QPA_PLATFORM=offscreen ctest --output-on-failure)`). Use only Qt's public API.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
   retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
 - `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,

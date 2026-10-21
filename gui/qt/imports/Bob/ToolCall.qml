@@ -1,0 +1,180 @@
+import QtQuick
+import QtQuick.Layouts
+import Bob.Backend
+
+// A tool call as a row: status, name, summary and time; open, it shows the input and output, and
+// a sub-agent's own work above them.
+Rectangle {
+    id: call
+
+    required property string rowKey
+    required property var item
+    readonly property double elapsed: item.start > 0 && (item.end > 0 || item.running)
+        ? (item.end > 0 ? item.end : Clock.now) - item.start : -1
+
+    implicitHeight: column.implicitHeight
+    radius: Theme.radius
+    color: Theme.surface
+    border.color: item.waiting ? Theme.warn : Theme.border
+
+    ColumnLayout {
+        id: column
+        width: parent.width
+        spacing: 0
+
+        Item {
+            Layout.fillWidth: true
+            implicitHeight: Math.max(36, head.implicitHeight + 12)
+            RowLayout {
+                id: head
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                spacing: 8
+                Item {
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    Icon {
+                        visible: call.item.waiting
+                        anchors.centerIn: parent
+                        name: "shield"
+                        size: 15
+                        color: Theme.warn
+                    }
+                    Spinner {
+                        visible: !call.item.waiting && call.item.running
+                        anchors.centerIn: parent
+                    }
+                    Icon {
+                        visible: !call.item.waiting && !call.item.running && (call.item.status === "completed" || call.item.status === "error")
+                        anchors.centerIn: parent
+                        name: call.item.status === "completed" ? "check" : "x"
+                        size: 15
+                        color: call.item.status === "completed" ? Theme.ok : Theme.error
+                    }
+                    Dot {
+                        visible: !call.item.waiting && !call.item.running && call.item.status !== "completed" && call.item.status !== "error"
+                        anchors.centerIn: parent
+                    }
+                }
+                Text {
+                    text: call.item.label
+                    color: Theme.text
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: call.item.summary
+                    color: call.item.status === "error" && !call.item.waiting ? Theme.error : Theme.text2
+                    font.pixelSize: 13
+                    elide: Text.ElideRight
+                }
+                Text {
+                    visible: call.elapsed >= 0
+                    text: Desktop.formatDuration(Math.max(0, call.elapsed))
+                    color: Theme.text3
+                    font.pixelSize: 12
+                }
+                Icon {
+                    name: "chevron"
+                    size: 13
+                    color: Theme.text3
+                    rotation: call.item.expanded ? 90 : 0
+                    Behavior on rotation { NumberAnimation { duration: 150 } }
+                }
+            }
+            HoverHandler {
+                cursorShape: Qt.PointingHandCursor
+            }
+            TapHandler {
+                onTapped: Chat.setExpanded(call.rowKey, !call.item.expanded)
+            }
+        }
+
+        // a sub-agent's own steps
+        Rectangle {
+            visible: call.item.expanded && call.item.child !== ""
+            Layout.fillWidth: true
+            height: 1
+            color: Theme.border
+        }
+        Loader {
+            active: call.item.expanded && call.item.child !== ""
+            visible: active
+            Layout.fillWidth: true
+            Layout.leftMargin: 12
+            Layout.rightMargin: 12
+            Layout.topMargin: 10
+            Layout.bottomMargin: 12
+            source: "SubAgentRun.qml"
+            onLoaded: item.sessionId = Qt.binding(() => call.item.child)
+        }
+
+        Rectangle {
+            visible: call.item.expanded
+            Layout.fillWidth: true
+            height: 1
+            color: Theme.border
+        }
+        ColumnLayout {
+            visible: call.item.expanded
+            Layout.fillWidth: true
+            Layout.leftMargin: 12
+            Layout.rightMargin: 12
+            Layout.bottomMargin: 12
+            spacing: 4
+            SectionLabel {
+                text: qsTr("INPUT")
+            }
+            Pre {
+                Layout.fillWidth: true
+                text: call.item.input
+            }
+            SectionLabel {
+                visible: call.item.output !== ""
+                text: call.item.outputLabel.toUpperCase()
+            }
+            Pre {
+                visible: call.item.output !== ""
+                Layout.fillWidth: true
+                text: call.item.output
+            }
+        }
+    }
+
+    component SectionLabel: Text {
+        Layout.topMargin: 6
+        color: Theme.text3
+        font.pixelSize: 11
+        font.weight: Font.DemiBold
+        font.letterSpacing: 0.4
+    }
+    component Pre: Rectangle {
+        property alias text: preText.text
+        implicitHeight: Math.min(320, preText.implicitHeight + 16)
+        radius: Theme.radiusSmall
+        color: Theme.surface2
+        clip: true
+        Flickable {
+            anchors.fill: parent
+            anchors.margins: 8
+            contentHeight: preText.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height
+            TextEdit {
+                id: preText
+                width: parent.width
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
+                textFormat: TextEdit.PlainText
+                color: Theme.text
+                selectionColor: Theme.accentSoft
+                selectedTextColor: Theme.text
+                font.family: Theme.mono
+                font.pixelSize: 12
+            }
+        }
+    }
+}
