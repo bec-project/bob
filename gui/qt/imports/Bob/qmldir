@@ -26,6 +26,7 @@ PermissionCard 1.0 PermissionCard.qml
 QuestionCard 1.0 QuestionCard.qml
 RequestCard 1.0 RequestCard.qml
 Requests 1.0 Requests.qml
+RestartDialog 1.0 RestartDialog.qml
 SessionRow 1.0 SessionRow.qml
 SettingsDialog 1.0 SettingsDialog.qml
 Sidebar 1.0 Sidebar.qml

@@ -34,6 +34,7 @@ qt_add_qml_module(bob-gui
         QuestionCard.qml
         RequestCard.qml
         Requests.qml
+        RestartDialog.qml
         SessionRow.qml
         SettingsDialog.qml
         Sidebar.qml
