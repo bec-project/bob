@@ -81,7 +81,9 @@ If you change:
   with `-race -count=5`. Keep clients in step with the protocol; the Qt app implements the client
   side in `gui/qt/src/bobsession.cpp`.
 - `gui/qt/`: build and run the unit tests (`cmake --build build/qt && (cd build/qt &&
-  QT_QPA_PLATFORM=offscreen ctest --output-on-failure)`). Use only Qt's public API.
+  QT_QPA_PLATFORM=offscreen ctest --output-on-failure)`); keep `imports/Bob/qmldir` and the
+  stand-ins in `designer/Bob/Backend` in step with the QML files and the C++ API, so Qt Design Studio
+  still opens `bob.qmlproject`. Use only Qt's public API.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
   retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
 - `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,

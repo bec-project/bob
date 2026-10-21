@@ -48,14 +48,17 @@ cmake --build build/qt
 build/qt/src/bob-gui.app/Contents/MacOS/bob-gui   # macOS; build/qt/src/bob-gui on Linux
 ```
 
-In **Qt Creator**, open `gui/qt/CMakeLists.txt`.
+In **Qt Creator**, open `gui/qt/CMakeLists.txt`. In **Qt Design Studio**, open
+`gui/qt/bob.qmlproject`: it shows the QML module in `imports/Bob` with the stand-ins in
+`designer/Bob/Backend` in place of the C++ backend, so the views can be edited without a bob.
 
 ## Layout
 
 | Path | What it holds |
 | --- | --- |
 | `src/` | The C++ backend, QML module `Bob.Backend`: the lease on bob (`bobsession`), its settings, running containers, the OpenCode client and event stream, the chat state (`chat`) and the models the views read |
-| `imports/Bob/` | The window, QML module `Bob` |
+| `imports/Bob/` | The window, QML module `Bob`; `qmldir` lets Design Studio read it from the source tree |
+| `designer/` | Design Studio's preview and stand-ins for `Bob.Backend` |
 | `tests/` | Unit tests (Qt Test) |
 | `packaging/` | The desktop entry and AppStream metadata |
 

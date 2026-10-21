@@ -38,7 +38,7 @@ the connection a client receives as a credential. For host-only access, set
 - [Configuration example](deploy/bob.example.toml) — settings and defaults
 - [Container manager](launcher/container_manager/README.md) — configuration, network policy, isolation limits, and testing
 - [Container image](containers/README.md) — building and bootstrap
-- [Desktop app](gui/qt/README.md) — features, building and running
+- [Desktop app](gui/qt/README.md) — features, building, Qt Creator and Design Studio
 
 The firewall filters IP addresses and ports, not domains or URL paths. Review the
 [isolation limits](launcher/container_manager/README.md#isolation-limits) before choosing mounts.
