@@ -7,6 +7,7 @@ qt_add_library(bobcore STATIC
     chatclient.cpp chatclient.h
     connection.cpp connection.h
     eventstream.cpp eventstream.h
+    mcpclient.cpp mcpclient.h
     opencodeapi.cpp opencodeapi.h
     runningbobs.cpp runningbobs.h
     sessiondata.cpp sessiondata.h

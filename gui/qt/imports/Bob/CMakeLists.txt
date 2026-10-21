@@ -1,7 +1,7 @@
 # The app: its window is the QML module Bob, on the executable itself, so deploying the app
 # finds every QML module it imports. qmldir beside it lets Qt Design Studio open the same files.
 qt_add_executable(bob-gui MACOSX_BUNDLE ${PROJECT_SOURCE_DIR}/src/main.cpp)
-set_source_files_properties(Theme.qml Clock.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(Theme.qml Clock.qml PluginRegistry.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(bob-gui
     URI Bob
@@ -30,7 +30,9 @@ qt_add_qml_module(bob-gui
         Main.qml
         MarkdownView.qml
         McpChip.qml
+        PanelFrame.qml
         PermissionCard.qml
+        PluginRegistry.qml
         QuestionCard.qml
         RequestCard.qml
         Requests.qml

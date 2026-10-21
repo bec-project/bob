@@ -4,6 +4,7 @@
 #include "bob.h"
 #include "bobpaths.h"
 #include "chat.h"
+#include "plugins.h"
 #include "prefs.h"
 
 #include <QDir>
@@ -37,6 +38,8 @@ int main(int argc, char *argv[])
     Prefs::setInstance(&prefs);
     Chat chat(&bob, &prefs);
     Chat::setInstance(&chat);
+    Plugins plugins(&bob, &chat, &prefs);
+    Plugins::setInstance(&plugins);
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },

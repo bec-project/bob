@@ -96,6 +96,65 @@ Dialog {
                 }
             }
 
+            // one row per plugin instance: the plugin, the MCP server it serves, and its switch
+            Section {
+                visible: PluginRegistry.all.length > 0 || PluginRegistry.missing.length > 0
+                title: qsTr("Plugins")
+                Repeater {
+                    model: PluginRegistry.all
+                    delegate: RowLayout {
+                        id: pluginRow
+                        required property var modelData
+                        readonly property bool on: {
+                            PluginRegistry.revision
+                            return Plugins.isEnabled(modelData.server)
+                        }
+                        Layout.fillWidth: true
+                        spacing: 12
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: pluginRow.modelData.plugin.name + " · " + pluginRow.modelData.server
+                                color: Theme.text
+                                font.weight: Font.Medium
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: pluginRow.modelData.plugin.description
+                                color: Theme.text3
+                                font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                            }
+                            Loader {
+                                active: pluginRow.on && !!pluginRow.modelData.plugin.settings
+                                visible: active
+                                Layout.fillWidth: true
+                                Layout.topMargin: 6
+                                sourceComponent: pluginRow.modelData.plugin.settings
+                                onLoaded: item.context = PluginRegistry.context(pluginRow.modelData)
+                            }
+                        }
+                        ToggleSwitch {
+                            Layout.alignment: Qt.AlignTop
+                            checked: pluginRow.on
+                            onToggled: Plugins.setEnabled(pluginRow.modelData.server, checked)
+                        }
+                    }
+                }
+                Repeater {
+                    model: PluginRegistry.missing
+                    delegate: Text {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        text: qsTr("bob.toml asks for the plugin “%1” for %2, which this app does not have.").arg(modelData.plugin).arg(modelData.server)
+                        color: Theme.text3
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+
             Section {
                 title: qsTr("Connection")
                 last: true

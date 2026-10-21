@@ -51,7 +51,9 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `containers/` — what bob ships as containers: the image build context, Python firewall bootstrap,
   shell entrypoint, and network tests
 - `gui/qt/` — the native desktop app (Qt 6.12, C++ and QML, CMake), which starts and holds bob and
-  chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`
+  chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`. Plugins are
+  QML modules under `imports/Bob/Plugins/` that import only Qt, `Bob`, `Bob.Backend`'s `Desktop`
+  and their own files; bob.toml enables one per MCP server
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
@@ -84,7 +86,9 @@ If you change:
 - `gui/qt/`: build and run the unit tests (`cmake --build build/qt && (cd build/qt &&
   QT_QPA_PLATFORM=offscreen ctest --output-on-failure)`); keep `imports/Bob/qmldir` and the
   stand-ins in `designer/Bob/Backend` in step with the QML files and the C++ API, so Qt Design Studio
-  still opens `bob.qmlproject`. Use only Qt's public API.
+  still opens `bob.qmlproject`. Use only Qt's public API. The MCP client the plugins call through
+  (`src/bob/mcpclient.cpp`, `src/gui/plugins.cpp`) must keep calling only servers from the connection of
+  the bob the app holds, over `http://` on loopback.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
   retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
 - `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,
