@@ -14,7 +14,6 @@
 #include <QQuickStyle>
 
 Q_IMPORT_QML_PLUGIN(Bob_BackendPlugin)
-Q_IMPORT_QML_PLUGIN(BobPlugin)
 
 int main(int argc, char *argv[])
 {
