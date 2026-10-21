@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
@@ -23,15 +24,18 @@ struct BobStatus
     QJsonObject connection;
     // Joined, Lost
     QString container;
-    // Joined: the bob.toml bob runs with; another one than `config` when another program started it
+    // Joined: the bob.toml bob runs with; another one than `config` (the one this app asked for)
+    // when another program started it first
     QString runningConfig;
+    // Joined: the clients holding bob when this app joined, this one included
+    int consumers = 0;
     // Lost: why the lease ended
     QString reason;
 
     static BobStatus idle(const QString &error = {});
     QString stateName() const;
     // {state: "idle", error}, {state: "joining", config}, {state: "joined", connection, container,
-    // config, runningConfig} or {state: "lost", reason, config, container}
+    // config, runningConfig, consumers} or {state: "lost", reason, config, container}
     QVariantMap toVariant() const;
     bool operator==(const BobStatus &other) const;
     bool operator!=(const BobStatus &other) const { return !(*this == other); }
@@ -58,13 +62,19 @@ public:
     BobStatus status() const { return m_status; }
 
     // Joins the user's bob, starting it with this bob.toml when none runs. Returns at once; the
-    // status reports the outcome. Holding bob already, or joining, it does nothing.
+    // status reports the outcome. Joining, it does nothing; holding bob already, it keeps it but
+    // notes the bob.toml asked for, so a different one shows as a mismatch.
     void join(const QString &binary, const QString &config);
+    // Stops the running bob for every client, then starts it again with this bob.toml and joins
+    // it. The other clients' leases end with `reason`.
+    void restart(const QString &binary, const QString &config, const QString &reason);
     // Ends the lease, or the join in progress. bob itself stops when no other client holds it.
     void leave();
 
     // bob's own startup limit is 90 s, and the broker may first remove the previous container.
     void setHelloTimeout(int milliseconds) { m_helloTimeout = milliseconds; }
+    // How long a stopped broker may take to go away.
+    void setStopTimeout(int milliseconds) { m_stopTimeout = milliseconds; }
 
 signals:
     void statusChanged();
@@ -74,7 +84,11 @@ private:
     void fail(quint64 generation, const QString &error);
     void dropProcess();
     void dropLease();
+    void dropStop();
+    void start(const QString &binary, const QString &config, const QString &stopReason);
+    void locate(quint64 generation);
     void located(quint64 generation);
+    void stopBroker(quint64 generation, const QString &socket);
     void connectBroker(quint64 generation, const QString &socket);
     void leaseData(quint64 generation);
     void leaseEnded(quint64 generation, const QString &error);
@@ -82,6 +96,15 @@ private:
 
     BobStatus m_status;
     quint64 m_generation = 0;
+    QString m_binary;
+    // While restarting: why the running bob stops, until its broker went away
+    QString m_stopReason;
+    // What the broker said when it ended the lease
+    QString m_stoppedReason;
+    QPointer<QLocalSocket> m_stopRequest;
+    QTimer m_stopWatch;
+    QElapsedTimer m_stopWaited;
+    int m_stopTimeout = 60000;
     QPointer<QProcess> m_process;
     QPointer<QLocalSocket> m_lease;
     QByteArray m_buffer;

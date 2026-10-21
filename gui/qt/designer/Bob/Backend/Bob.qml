@@ -8,6 +8,7 @@ QtObject {
         container: "bob-501-6c788c03",
         config: "/home/me/bob.toml",
         runningConfig: "/home/me/bob.toml",
+        consumers: 1,
         connection: { url: "http://127.0.0.1:52997", container: "bob-501-6c788c03" }
     })
     readonly property string state: status.state
@@ -25,6 +26,7 @@ QtObject {
 
     function join() {}
     function leave() {}
+    function restart() {}
     function saveSettings(config, binary, autoJoin) { return "" }
     function refreshRunning() {}
 }

@@ -53,6 +53,9 @@ public:
     // Joins the user's bob with the chosen (or default) executable and bob.toml.
     Q_INVOKABLE void join();
     Q_INVOKABLE void leave();
+    // Stops the user's bob for every client that holds it and starts it again with the chosen
+    // (or default) bob.toml, then joins it.
+    Q_INVOKABLE void restart();
     // Saves how the app starts bob; it applies from the next join. Returns an error or "".
     Q_INVOKABLE QString saveSettings(const QString &config, const QString &binary, bool autoJoin);
     Q_INVOKABLE void refreshRunning();

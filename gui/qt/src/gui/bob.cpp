@@ -66,6 +66,13 @@ void Bob::leave()
     m_session.leave();
 }
 
+void Bob::restart()
+{
+    const QString config = m_settings.resolvedConfig();
+    m_session.restart(m_settings.resolvedBinary(), config,
+                      QStringLiteral("another app restarted bob with %1").arg(config));
+}
+
 QString Bob::saveSettings(const QString &config, const QString &binary, bool autoJoin)
 {
     const QString error = m_settings.set({config, binary, autoJoin});
