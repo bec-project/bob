@@ -61,8 +61,8 @@ The CLI reads `bob.toml`, or `--config PATH`. See
   Connection JSON now returns `mcpPorts`, a map of server names to published host
   addresses, replacing the former single `mcpPort` field. It is omitted when no MCP
   ports are published.
-- **Access:** `container.web = true` enables the browser UI; the default is headless `serve`.
-  Both use a generated host port and password. The default bind address is `0.0.0.0`;
+- **Access:** OpenCode serves its API (`serve`) on a generated host port with a generated
+  password; bob's GUI is its user interface. The default bind address is `0.0.0.0`;
   use `127.0.0.1` for host-only access. Remote access needs the host's reachable address
   and a trusted network or HTTPS ingress. Treat connection JSON as a credential.
 
@@ -70,6 +70,43 @@ On enforcing SELinux hosts, use pre-labeled mounts or explicitly select
 `workspace.mount_label`. Relabeling changes host files, including read-only sources;
 avoid system directories and whole home directories. Private labels are unsuitable for
 mounts shared with other containers.
+
+## How bob runs
+
+Each user has one bob, started by their first GUI and shared by every client of that user: the
+desktop app (one or more windows of it), later BEC widgets. bob has no headless mode; a container runs only
+while a client holds it, and for the linger time after the last one leaves.
+
+A per-user broker owns the container. A client finds it with
+
+```sh
+bob-manager --config bob.toml [--linger 90s]
+```
+
+which makes sure the broker runs, starting a detached one with this bob.toml when none answers,
+and prints one JSON line, `{"socket": "<path>"}`. The client then connects to that socket, sends
+one JSON line `{"consumer": "<name>", "pid": <pid>, "config": "<absolute bob.toml>"}` and reads
+one line back once bob is up: `{"connection": {...}, "config": "...", "consumers": <n>}` or
+`{"error": "..."}`. A bob that is already running keeps its own configuration; the reply's
+`config` names it. The client holds its lease for as long as it keeps the connection open, so
+quitting or crashing ends the lease too. The broker starts bob for the first client and, once
+the last lease has been gone for `--linger` (default 90 s, so reopening a GUI keeps bob), stops
+it the usual way, removing the container, and exits. A broker that no client joins exits without
+starting bob. While bob runs, the broker checks every 5 seconds that its container still runs
+and its host MCP servers are alive. Once the container stopped or is gone (an engine restart, an
+out-of-memory kill), a host MCP server exited, or the engine has not answered six checks in a
+row, the broker closes every lease, cleans up and exits, so clients learn that bob stopped and
+the next one starts a new bob. Clients that only use a running bob, such as background services,
+should connect to the socket and not start a broker.
+
+The broker is the same executable run with `--broker`, detached in its own session so closing the
+client that started it does not reach it. Its socket, lock and log (`broker.log`) live in a
+private per-user directory: `$BOB_RUNTIME_DIR`, else `$XDG_RUNTIME_DIR/bob`, else `$TMPDIR/bob`
+on macOS, else `/tmp/bob-<uid>`. It must be on a local filesystem and accessible only to its
+owner. A lock file ensures one broker per user; a broker that finds the lock taken exits.
+
+The default home volume is `bob-<user name>-home`, so every bob of a user keeps the same sessions
+and users of one engine never share them. Set `container.home_volume` to keep an older volume.
 
 ## Runtime requirements
 
@@ -148,6 +185,13 @@ conflicting files fail delivery. No new release commit or version is needed for 
 The checksum manifest must cover every expected binary archive exactly once. Image
 publication is serialized; retries may publish an older version's image, but only the
 newest published stable GitHub release is promoted to the registry's `latest` tag.
+
+The desktop app follows once delivery has succeeded: CI builds an arm64 macOS DMG and a Linux
+Flatpak on the GNOME runtime, which brings the WebKitGTK 4.1 that RHEL 9 lacks. They go into the
+same Gitea package (`bob/<version>`) and then onto the GitHub release, with
+`bob-desktop_<version>_SHA256SUMS`. A retry of the same run accepts the identical files in
+Gitea; a new build whose files differ from Gitea's fails before GitHub. Full CI builds the same
+files on every push without publishing them.
 
 A retry also recovers interrupted GitHub publication for an existing tag on the tested
 commit. Missing releases are recreated as drafts; incomplete drafts keep their release

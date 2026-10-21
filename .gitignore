@@ -10,3 +10,5 @@ __pycache__/
 /.coverage
 /launcher/coverage.out
 /coverage.xml
+
+/gui/desktop/binaries/

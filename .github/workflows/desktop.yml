@@ -1,0 +1,104 @@
+name: Desktop app bundles
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version stamped into the bundles
+        type: string
+        required: true
+      ref:
+        description: Commit to build
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest # arm64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: launcher/go.mod
+          cache-dependency-path: launcher/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gui/web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gui/desktop
+      - run: npm ci
+        working-directory: gui/web
+      - name: Build the DMG
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash ci/build_desktop.sh macos "$VERSION" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Install WebKitGTK 4.1 and the other build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gui/web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gui/desktop
+      - run: npm ci
+        working-directory: gui/web
+      - name: Build the app binary
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash ci/build_desktop.sh linux "$VERSION" build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: build/bob-gui
+          if-no-files-found: error
+
+  flatpak:
+    needs: linux
+    runs-on: ubuntu-latest
+    # RHEL 9 has no WebKitGTK 4.1, which Tauri 2 needs; the Flatpak's GNOME runtime brings it.
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          path: build
+      - name: Build the Flatpak bundle
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash ci/build_flatpak.sh "$VERSION" build/bob-gui dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-flatpak
+          path: dist/*.flatpak
+          if-no-files-found: error

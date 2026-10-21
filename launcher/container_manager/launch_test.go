@@ -53,12 +53,7 @@ func TestLaunchPreservesIdentityEndpointsAndArguments(t *testing.T) {
 		t.Fatal("incorrect remote MCP URL")
 	}
 	if !strings.Contains(command, "serve --hostname 0.0.0.0 --port 4096") {
-		t.Fatal("default command is not serve")
-	}
-	options.Web = true
-	webArgs, _, err := getLaunchArgs(options)
-	if err != nil || !strings.Contains(strings.Join(webArgs, " "), "web --hostname 0.0.0.0 --port 4096") {
-		t.Fatal("web command was not selected")
+		t.Fatal("OpenCode does not run its API server")
 	}
 }
 
