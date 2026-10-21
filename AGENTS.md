@@ -83,8 +83,9 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
     manager), and its tests
 - `gui/qt/` — the native desktop app (Qt 6.12, C++ and QML, CMake), which starts and holds bob and
   chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`. Plugins are
-  QML modules under `imports/Bob/Plugins/` that import only Qt, `Bob`, `Bob.Backend`'s `Desktop`
-  and their own files; bob.toml enables one per MCP server
+  modules under `imports/Bob/Plugins/` with their logic in C++ and their views in QML that imports
+  only Qt, `Bob`, `Bob.Backend`'s `Desktop` and the plugin's own types; bob.toml enables one per MCP
+  server
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows

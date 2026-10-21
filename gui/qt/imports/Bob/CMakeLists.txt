@@ -73,7 +73,10 @@ qt_add_resources(bob-gui "app"
     FILES
         ${PROJECT_SOURCE_DIR}/qtquickcontrols2.conf
 )
-target_link_libraries(bob-gui PRIVATE Qt6::Gui Qt6::Quick Qt6::QuickControls2 bobbackend bobbackendplugin)
+# the plugins the app ships (PluginRegistry.qml loads them by name)
+add_subdirectory(Plugins/Bec)
+target_link_libraries(bob-gui PRIVATE
+    Qt6::Gui Qt6::Quick Qt6::QuickControls2 bobbackend bobbackendplugin bobbecplugin)
 set_target_properties(bob-gui PROPERTIES
     OUTPUT_NAME bob-gui
     # build/bob-gui (build/bob-gui.app on macOS)
