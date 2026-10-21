@@ -7,6 +7,7 @@ QtObject {
     id: plugins
 
     property var servers: [{ name: "bec", url: "http://127.0.0.1:8000/mcp", plugin: "bec" }]
+    property var versions: ({ bec: "1.4.0" })
     property var switches: ({})
     property var instanceSettings: ({})
 
