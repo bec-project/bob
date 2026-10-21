@@ -18,8 +18,8 @@ starts: the first app a user opens starts their bob, and later ones join it.
   Downloads.
 - **Earlier prompts**: *Up* on the composer's first line steps back through the chat's prompts,
   *Down* forward again.
-- **MCP servers**: one chip per server in the header, coloured by its state; a server that is not
-  connected connects again when clicked.
+- **MCP servers**: one chip per server in the header, coloured by its state and with the version
+  the server reports; a server that is not connected connects again when clicked.
 - **Plugins**: views for the tools of the MCP servers bob.toml names, such as BEC's report cards,
   panels and scan approvals (see [Plugins](#plugins)).
 
@@ -89,6 +89,9 @@ off) and the plugin's own settings; a plugin name the app does not have is liste
 Instances come from the chat's connection, so they stay while bob is lost; their calls reach only
 the MCP servers of the bob this app holds, and fail with "join bob first" otherwise. A bob
 connected by hand names no MCP servers, so it gets no plugins.
+
+The app also asks each MCP server of the bob it holds for its version (the `serverInfo` of MCP's
+`initialize`) whenever OpenCode reports it connected, and shows it on the chip and in Settings.
 
 The BEC plugin (`plugin = "bec"`) adds report cards for a BEC MCP server's results, panels for
 devices, log incidents and the queue, and readable scan approvals; see
