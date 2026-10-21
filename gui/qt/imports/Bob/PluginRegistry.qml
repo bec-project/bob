@@ -17,7 +17,9 @@ QtObject {
     id: registry
 
     // id -> where the plugin's object lives; adding a plugin adds a line here
-    readonly property var known: ({})
+    readonly property var known: ({
+        bec: { module: "Bob.Plugins.Bec", type: "BecPlugin" }
+    })
     // bumped when a switch changes, so the lists below are read again
     property int revision: 0
 

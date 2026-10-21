@@ -1,0 +1,34 @@
+{
+ "ok": true,
+ "summary": "No problems found for samx; 1 note. First: samx's readback last changed 78 min ago (value 5.005). BEC publishes readbacks only when they change, which is normal for a device at rest; if it should be changing, check its hardware.",
+ "findings": [
+  "Info: samx's readback last changed 78 min ago (value 5.005). BEC publishes readbacks only when they change, which is normal for a device at rest; if it should be changing, check its hardware. Next: bec_device_read(device=\"samx\")."
+ ],
+ "data": {
+  "device": "samx",
+  "configured": true,
+  "enabled": true,
+  "readback": 5.005004481443811,
+  "readback_age_s": 4670.7,
+  "limits": [
+   -50.0,
+   50.0
+  ],
+  "moving": false,
+  "window_s": 3600.0,
+  "findings": [
+   {
+    "severity": "info",
+    "code": "device.readback_old",
+    "subject": "samx",
+    "next": {
+     "tool": "bec_device_read",
+     "args": {
+      "device": "samx"
+     }
+    }
+   }
+  ]
+ },
+ "truncated": false
+}

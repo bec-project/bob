@@ -29,7 +29,7 @@ the connection a client receives as a credential. For host-only access, set
 | --- | --- |
 | `launcher/` | Go module: the `bob-manager` CLI (`cmd/container_manager`) and the `containermanager` package |
 | `containers/` | What bob ships as containers: the OpenCode image's Dockerfile, firewall bootstrap, entrypoint and OpenCode configuration |
-| `gui/qt/` | The desktop app (Qt 6, C++ and QML): starts and holds bob, and chats with it, with plugins for MCP servers; RPM for RHEL 9 and a macOS DMG |
+| `gui/qt/` | The desktop app (Qt 6, C++ and QML): starts and holds bob, and chats with it, with plugins for MCP servers such as BEC; RPM for RHEL 9 and a macOS DMG |
 | `deploy/` | Deployment configuration: the annotated `bob.example.toml` |
 | `ci/`, `.github/` | Release tooling and CI workflows |
 
