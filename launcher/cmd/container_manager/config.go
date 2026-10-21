@@ -38,6 +38,7 @@ type config struct {
 		Port        int      `toml:"port"`
 		URL         string   `toml:"url"`
 		HostCommand []string `toml:"host_command"`
+		Plugin      string   `toml:"plugin"`
 		// Decode only to explain the removed setting; never forward or execute it.
 		UnsupportedCommand any `toml:"command"`
 	} `toml:"mcp"`
@@ -87,6 +88,7 @@ func loadConfig(path string) (containermanager.Options, error) {
 			input.MCPServers[name] = containermanager.MCPServer{
 				Port: server.Port, URL: server.URL,
 				HostCommand: server.HostCommand,
+				Plugin:      server.Plugin,
 			}
 		}
 	}

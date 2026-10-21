@@ -63,6 +63,9 @@ model = "Qwen3.8-27B"
 # Each server's published container port must be unique; a host port is allocated automatically.
 # This does not start a server; HTTP(S) connections do not require port publishing.
 # port = 19000
+# Optional GUI plugin that adds views for this server's tools, such as "bec". Each server names
+# at most one; the GUI makes one instance of it per server, which users can switch off there.
+# plugin = "bec"
 
 # To let bob start a host HTTP MCP server, keep url and add host_command below.
 # host_command executes OUTSIDE the container, without shell parsing.
