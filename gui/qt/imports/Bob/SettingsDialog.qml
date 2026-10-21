@@ -175,9 +175,12 @@ Dialog {
                             if (Chat.serverVersion)
                                 rows.push([qsTr("OpenCode"), Chat.serverVersion])
                             rows.push([qsTr("App"), Bob.version])
-                            for (const server of Chat.mcpServers)
-                                rows.push(["MCP " + server.name, server.status + (server.error ? ": " + server.error : ""),
+                            for (const server of Chat.mcpServers) {
+                                const version = Plugins.versions[server.name]
+                                rows.push(["MCP " + server.name, server.status + (version ? " · " + version : "")
+                                           + (server.error ? ": " + server.error : ""),
                                            server.status === "connected" ? "ok" : "warn"])
+                            }
                             const cells = []
                             for (const row of rows)
                                 cells.push({ text: row[0], key: true, tone: "" }, { text: row[1], key: false, tone: row[2] ?? "" })

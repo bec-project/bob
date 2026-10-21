@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlEngine>
+#include <QSet>
 #include <QVariantMap>
 
 #include <functional>
@@ -45,6 +46,8 @@ public:
     using Callback = std::function<void(const QJsonValue &result, const QString &error)>;
     void callTool(const QString &tool, const QJsonObject &arguments, int timeoutMs, Callback done);
     void listTools(Callback done);
+    // A new session; `done(serverInfo, error)`.
+    void initialize(std::function<void(const QJsonObject &, const QString &)> done);
 
 signals:
     void tokenChanged();
@@ -64,9 +67,9 @@ private:
 };
 
 // The plugins' side of the app: the MCP servers bob.toml names (with the plugin that serves each),
-// a client for each, and their switches and settings. The servers come from the chat's
-// connection, so their views stay while bob is lost; their calls reach only the servers of the bob
-// this app holds.
+// a client for each, their switches and settings, and every server's version. The servers come
+// from the chat's connection, so their views stay while bob is lost; their calls reach only the
+// servers of the bob this app holds.
 class Plugins : public QObject
 {
     Q_OBJECT
@@ -74,6 +77,8 @@ class Plugins : public QObject
     QML_SINGLETON
     // [{name, url, plugin}] for every MCP server of the held bob that has a URL, by name
     Q_PROPERTY(QVariantList servers READ servers NOTIFY serversChanged)
+    // name -> the version the server reported (MCP's serverInfo.version)
+    Q_PROPERTY(QVariantMap versions READ versions NOTIFY versionsChanged)
 
 public:
     Plugins(Bob *bob, Chat *chat, Prefs *prefs, QObject *parent = nullptr);
@@ -82,6 +87,7 @@ public:
     static void setInstance(Plugins *plugins);
 
     QVariantList servers() const { return m_servers; }
+    QVariantMap versions() const { return m_versions; }
 
     // The server named `name` in bob.toml, for a plugin instance's calls; null when there is none.
     Q_INVOKABLE McpServer *server(const QString &name);
@@ -97,11 +103,14 @@ public:
 
 signals:
     void serversChanged();
+    void versionsChanged();
     // A switch or an instance's settings changed.
     void prefsChanged();
 
 private:
     void readConnection();
+    void readStatus();
+    void probe(const QString &name);
 
     Bob *m_bob;
     Chat *m_chat;
@@ -110,4 +119,7 @@ private:
     QVariantList m_servers;
     QHash<QString, QString> m_urls;
     QHash<QString, McpServer *> m_clients;
+    QVariantMap m_versions;
+    // the servers OpenCode had connected when last asked
+    QSet<QString> m_connected;
 };

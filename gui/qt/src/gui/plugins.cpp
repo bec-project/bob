@@ -92,6 +92,17 @@ void McpServer::listTools(Callback done)
     client->tools(std::move(done));
 }
 
+void McpServer::initialize(std::function<void(const QJsonObject &, const QString &)> done)
+{
+    QString error;
+    McpClient *client = this->client(&error);
+    if (!client) {
+        done({}, error);
+        return;
+    }
+    client->initialize([done](const QJsonValue &info, const QString &error) { done(info.toObject(), error); });
+}
+
 Plugins::Plugins(Bob *bob, Chat *chat, Prefs *prefs, QObject *parent)
     : QObject(parent)
     , m_bob(bob)
@@ -99,6 +110,7 @@ Plugins::Plugins(Bob *bob, Chat *chat, Prefs *prefs, QObject *parent)
     , m_prefs(prefs)
 {
     connect(m_chat, &Chat::phaseChanged, this, &Plugins::readConnection);
+    connect(m_chat, &Chat::mcpChanged, this, &Plugins::readStatus);
     connect(m_prefs, &Prefs::changed, this, &Plugins::prefsChanged);
     readConnection();
 }
@@ -144,7 +156,47 @@ void Plugins::readConnection()
     }
     m_urls = urls;
     m_servers = list;
+    m_connected.clear();
+    m_versions.clear();
     emit serversChanged();
+    emit versionsChanged();
+    readStatus();
+}
+
+void Plugins::readStatus()
+{
+    QSet<QString> connected;
+    for (const QVariant &entry : m_chat->mcpServers()) {
+        const QVariantMap server = entry.toMap();
+        if (server.value(QStringLiteral("status")).toString() == QStringLiteral("connected"))
+            connected.insert(server.value(QStringLiteral("name")).toString());
+    }
+    // a server that (re)connected may be a restarted or upgraded one: ask its version again
+    for (const QString &name : connected) {
+        if (!m_connected.contains(name) && m_urls.contains(name))
+            probe(name);
+    }
+    m_connected = connected;
+}
+
+void Plugins::probe(const QString &name)
+{
+    McpServer *target = server(name);
+    if (!target)
+        return;
+    QPointer<McpServer> guard(target);
+    target->initialize([this, name, guard](const QJsonObject &info, const QString &error) {
+        if (!guard || m_clients.value(name) != guard)
+            return;
+        const QString version = error.isEmpty() ? info.value(QStringLiteral("version")).toString() : QString();
+        if (m_versions.value(name).toString() == version)
+            return;
+        if (version.isEmpty())
+            m_versions.remove(name);
+        else
+            m_versions.insert(name, version);
+        emit versionsChanged();
+    });
 }
 
 McpServer *Plugins::server(const QString &name)
