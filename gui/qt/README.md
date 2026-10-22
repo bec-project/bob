@@ -52,6 +52,17 @@ In **Qt Creator**, open `gui/qt/CMakeLists.txt`. In **Qt Design Studio**, open
 `gui/qt/bob.qmlproject`: it shows the QML module in `imports/Bob` with the stand-ins in
 `designer/Bob/Backend` in place of the C++ backend, so the views can be edited without a bob.
 
+For **QML live preview** (edits to the QML appear in the running app without a rebuild), build
+with QML debugging, which a release build must never have: in Qt Creator, *QML debugging and
+profiling* in the build settings, or `-DCMAKE_CXX_FLAGS_INIT=-DQT_QML_DEBUG`. Qt's
+`QmlPreviewMcpServer` (Qt 6.12's Agentic Development Tools in the Maintenance Tool) then starts
+the app with `run_qmlPreview`, given the app's executable
+(`build/qt/bob-gui.app/Contents/MacOS/bob-gui`). To use it from Claude Code:
+
+```sh
+claude mcp add qmlpreview ~/Qt/6.12.0/macos/bin/QmlPreviewMcpServer
+```
+
 ## Layout
 
 | Path | What it holds |

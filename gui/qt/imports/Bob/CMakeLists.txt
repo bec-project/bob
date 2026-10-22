@@ -56,6 +56,14 @@ qt_add_qml_module(bob-gui
         Bob.Backend
 )
 
+# QML live preview (Qt 6.12's QmlPreviewMcpServer, for a build with QT_QML_DEBUG) looks for the
+# app's preview files in .rcc/qmlpreview beside the app, but Qt writes them where the target is
+# made: link them up to the build's top folder, where the app is.
+if(NOT CMAKE_CURRENT_BINARY_DIR STREQUAL CMAKE_BINARY_DIR)
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/.rcc)
+    file(CREATE_LINK ${CMAKE_CURRENT_BINARY_DIR}/.rcc/qmlpreview ${CMAKE_BINARY_DIR}/.rcc/qmlpreview SYMBOLIC)
+endif()
+
 qt_add_resources(bob-gui "app"
     PREFIX "/"
     BASE ${PROJECT_SOURCE_DIR}
