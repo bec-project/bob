@@ -147,7 +147,10 @@ Dialog {
                     delegate: Text {
                         required property var modelData
                         Layout.fillWidth: true
-                        text: qsTr("bob.toml asks for the plugin “%1” for %2, which this app does not have.").arg(modelData.plugin).arg(modelData.server)
+                        text: modelData.error
+                            ? qsTr("The plugin “%1” for %2 did not load: %3").arg(modelData.plugin).arg(modelData.server).arg(modelData.error)
+                            : qsTr("bob.toml asks for the plugin “%1” for %2, which this app does not have.").arg(modelData.plugin).arg(modelData.server)
+                        textFormat: Text.PlainText
                         color: Theme.text3
                         font.pixelSize: 12
                         wrapMode: Text.Wrap
