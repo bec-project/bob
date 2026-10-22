@@ -35,6 +35,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: 60
             text: Chat.title
+            textFormat: Text.PlainText
             color: Theme.text
             font.pixelSize: 15
             font.weight: Font.DemiBold

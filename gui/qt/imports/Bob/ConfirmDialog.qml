@@ -34,6 +34,7 @@ Dialog {
     }
     contentItem: Text {
         text: dialog.text
+        textFormat: Text.PlainText
         color: Theme.text2
         wrapMode: Text.Wrap
     }

@@ -109,6 +109,7 @@ Rectangle {
                     Text {
                         Layout.fillWidth: true
                         text: change.modelData.prompt || qsTr("(no text)")
+                        textFormat: Text.PlainText
                         color: Theme.text
                         font.pixelSize: 13
                         font.weight: Font.Medium

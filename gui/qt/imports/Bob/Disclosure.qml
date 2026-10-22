@@ -35,6 +35,7 @@ Item {
         }
         Text {
             text: disclosure.text
+            textFormat: Text.PlainText
             color: disclosure.color
             font.pixelSize: 13
             font.weight: Font.Medium

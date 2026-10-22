@@ -59,6 +59,7 @@ Rectangle {
                 }
                 Text {
                     text: call.item.label
+                    textFormat: Text.PlainText
                     color: Theme.text
                     font.pixelSize: 14
                     font.weight: Font.Medium
@@ -66,6 +67,7 @@ Rectangle {
                 Text {
                     Layout.fillWidth: true
                     text: call.item.summary
+                    textFormat: Text.PlainText
                     color: call.item.status === "error" && !call.item.waiting ? Theme.error : Theme.text2
                     font.pixelSize: 13
                     elide: Text.ElideRight

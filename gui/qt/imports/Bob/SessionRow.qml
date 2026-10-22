@@ -60,6 +60,7 @@ Item {
         Text {
             Layout.fillWidth: true
             text: row.title || qsTr("Untitled")
+            textFormat: Text.PlainText
             color: Theme.text
             font.pixelSize: 14
             elide: Text.ElideRight

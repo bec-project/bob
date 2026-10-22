@@ -128,6 +128,7 @@ Dialog {
                             required property var modelData
                             Layout.fillWidth: !modelData.key
                             text: modelData.text
+                            textFormat: Text.PlainText
                             color: modelData.key ? Theme.text3 : modelData.tone ? Theme.tone(modelData.tone) : Theme.text
                             font.pixelSize: 13
                             wrapMode: modelData.key ? Text.NoWrap : Text.WrapAnywhere

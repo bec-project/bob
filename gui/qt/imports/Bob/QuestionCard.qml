@@ -42,6 +42,7 @@ RequestCard {
                 Text {
                     Layout.fillWidth: true
                     text: question.modelData.question
+                    textFormat: Text.PlainText
                     color: Theme.text
                     font.pixelSize: 14
                     font.weight: Font.DemiBold
@@ -80,6 +81,7 @@ RequestCard {
                             Text {
                                 Layout.fillWidth: true
                                 text: option.modelData.label
+                                textFormat: Text.PlainText
                                 color: Theme.text
                                 wrapMode: Text.Wrap
                             }
@@ -87,6 +89,7 @@ RequestCard {
                                 visible: !!option.modelData.description
                                 Layout.fillWidth: true
                                 text: option.modelData.description ?? ""
+                                textFormat: Text.PlainText
                                 color: Theme.text3
                                 font.pixelSize: 12
                                 wrapMode: Text.Wrap

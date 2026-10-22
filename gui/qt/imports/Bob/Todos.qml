@@ -73,6 +73,7 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: modelData.content
+                        textFormat: Text.PlainText
                         color: finished ? Theme.text3 : Theme.text
                         font.pixelSize: 13
                         font.strikeout: finished

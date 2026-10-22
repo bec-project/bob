@@ -161,6 +161,7 @@ Item {
                         Layout.topMargin: 6
                         Layout.fillWidth: true
                         text: screen.saveError
+                        textFormat: Text.PlainText
                         color: Theme.error
                         font.pixelSize: 13
                         wrapMode: Text.Wrap

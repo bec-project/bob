@@ -27,6 +27,7 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             text: banner.text
+            textFormat: Text.PlainText
             color: Theme.tone(banner.tone)
             font.pixelSize: 13
             wrapMode: Text.Wrap

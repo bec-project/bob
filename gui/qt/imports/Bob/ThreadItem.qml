@@ -217,6 +217,7 @@ Item {
                 id: patchText
                 width: Math.min(implicitWidth, parent.width)
                 text: (row.item.count === 1 ? qsTr("Changed 1 file: %1") : qsTr("Changed %1 files: %2").arg(row.item.count)).arg(row.item.names)
+                textFormat: Text.PlainText
                 color: Theme.accentText
                 font.pixelSize: 13
                 font.underline: patchHover.hovered
@@ -238,6 +239,7 @@ Item {
         id: file
         Text {
             text: qsTr("Attached %1").arg(row.item.name)
+            textFormat: Text.PlainText
             color: Theme.text3
             font.pixelSize: 13
         }
