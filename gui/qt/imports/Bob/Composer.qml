@@ -28,9 +28,10 @@ Item {
     function step(up) {
         if (input.selectedText !== "")
             return false
-        const before = input.text.slice(0, input.cursorPosition)
-        const after = input.text.slice(input.cursorPosition)
-        if (up ? before.indexOf("\n") !== -1 : after.indexOf("\n") !== -1)
+        // only from the first (Up) or last (Down) line as shown, wrapped lines included
+        const caret = input.positionToRectangle(input.cursorPosition).y
+        const edge = input.positionToRectangle(up ? 0 : input.length).y
+        if (up ? caret > edge : caret < edge)
             return false
         const next = Chat.recall(up, input.text)
         if (next.text === undefined)
