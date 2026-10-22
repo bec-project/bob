@@ -854,7 +854,8 @@ void Chat::loadMessages(const QString &sessionID)
             if (sessionID == m_currentId)
                 loadChanges(sessionID);
         }
-        touch(Thread | Children | Current | Usage);
+        // a pending request shows its tool call, which these messages may hold
+        touch(Thread | Children | Current | Usage | Requests);
     });
 }
 
