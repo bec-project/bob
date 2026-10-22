@@ -9,6 +9,8 @@ RequestCard {
 
     required property var request
     property bool answering: false
+    // the keys that allow this request once, on the oldest request only (see Requests.qml)
+    property string shortcut: ""
 
     function answer(reply) {
         answering = true
@@ -21,13 +23,6 @@ RequestCard {
         function onPermissionReplyFailed(id) {
             if (id === card.request.id)
                 card.answering = false
-        }
-    }
-
-    Keys.onPressed: (event) => {
-        if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (event.modifiers & Qt.ControlModifier)) {
-            event.accepted = true
-            answer("once")
         }
     }
 
@@ -86,8 +81,7 @@ RequestCard {
             text: qsTr("Allow once")
             variant: "primary"
             enabled: !card.answering
-            focus: true
-            tip: qsTr("Ctrl+Enter")
+            tip: card.shortcut
             onClicked: card.answer("once")
         }
         AppButton {

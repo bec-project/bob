@@ -9,6 +9,19 @@ Item {
     visible: Chat.permissions.length + Chat.questions.length > 0
     implicitHeight: visible ? column.implicitHeight : 0
 
+    // Ctrl+Enter (⌘↵ on macOS) allows the oldest request once, wherever the focus is: a shortcut
+    // comes before the composer, whose Enter would otherwise send the draft
+    Shortcut {
+        id: allow
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: permissions.count > 0
+        onActivated: {
+            const card = permissions.itemAt(0)
+            if (card && !card.answering)
+                card.answer("once")
+        }
+    }
+
     ColumnLayout {
         id: column
         x: Math.round((parent.width - width) / 2)
@@ -16,11 +29,14 @@ Item {
         spacing: 10
 
         Repeater {
+            id: permissions
             model: Chat.permissions
             delegate: PermissionCard {
                 required property var modelData
+                required property int index
                 Layout.fillWidth: true
                 request: modelData
+                shortcut: index === 0 ? allow.nativeText : ""
             }
         }
         Repeater {
