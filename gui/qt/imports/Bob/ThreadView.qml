@@ -49,7 +49,7 @@ Item {
             ThreadItem {
                 id: content
                 x: Math.round((slot.width - width) / 2)
-                width: Math.min(Theme.column, slot.width) - 40
+                width: Math.min(Theme.column, slot.width - 40)
                 key: slot.key
                 kind: slot.kind
                 item: slot.item
