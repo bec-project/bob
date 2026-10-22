@@ -23,6 +23,8 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
+            // a layout in a layout fills the height unless told otherwise
+            Layout.fillHeight: false
             Layout.preferredHeight: 52
             Layout.leftMargin: 12
             Layout.rightMargin: 8
@@ -47,7 +49,7 @@ Rectangle {
         }
         Rectangle {
             Layout.fillWidth: true
-            height: 1
+            Layout.preferredHeight: 1
             color: Theme.border
         }
 
@@ -77,7 +79,7 @@ Rectangle {
         Rectangle {
             visible: Chat.changes.length > 0
             Layout.fillWidth: true
-            height: 1
+            Layout.preferredHeight: 1
             color: Theme.border
         }
 
@@ -136,6 +138,11 @@ Rectangle {
                     }
                 }
             }
+        }
+        // keeps the message for an empty list at the top
+        Item {
+            visible: !list.visible
+            Layout.fillHeight: true
         }
     }
 
