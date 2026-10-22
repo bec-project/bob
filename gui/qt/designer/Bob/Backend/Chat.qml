@@ -74,6 +74,7 @@ QtObject {
     ]
 
     signal composerRequest(string text, bool replace)
+    signal permissionReplyFailed(string id)
 
     function connectTo(connection) {}
     function joinBob() {}

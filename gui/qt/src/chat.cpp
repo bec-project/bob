@@ -1055,13 +1055,16 @@ void Chat::deleteSession(const QString &id)
 void Chat::replyPermission(const QString &id, const QString &reply)
 {
     OpencodeApi *api = m_api;
-    if (!api)
+    if (!api) {
+        emit permissionReplyFailed(id);
         return;
+    }
     api->replyPermission(id, reply, [this, api, id](const QJsonValue &, const std::optional<ApiError> &error) {
         if (!current(api))
             return;
         if (error) {
             fail(*error);
+            emit permissionReplyFailed(id);
             return;
         }
         m_data.permissions.remove(id);

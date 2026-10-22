@@ -171,6 +171,8 @@ signals:
     void lostChanged();
     // Put text into the composer: replace it, or add it to what is there.
     void composerRequest(const QString &text, bool replace);
+    // A reply to the permission request `id` did not reach OpenCode; the request is still open.
+    void permissionReplyFailed(const QString &id);
 
 private:
     enum Dirty {
