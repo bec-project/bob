@@ -24,18 +24,22 @@ QtObject {
     property int revision: 0
 
     property var loaded: ({})
+    // id -> why the plugin did not load; it is not tried again
+    property var failed: ({})
     property var contexts: ({})
 
     function plugin(id) {
-        if (!known[id])
+        if (!known[id] || failed[id])
             return null
         if (!loaded[id]) {
             const component = Qt.createComponent(known[id].module, known[id].type)
-            if (component.status !== Component.Ready) {
-                console.warn("plugin " + id + ": " + component.errorString())
+            const object = component.status === Component.Ready ? component.createObject(registry) : null
+            if (!object) {
+                failed[id] = component.errorString() || qsTr("its object could not be made")
+                console.warn("plugin " + id + ": " + failed[id])
                 return null
             }
-            loaded[id] = component.createObject(registry)
+            loaded[id] = object
         }
         return loaded[id]
     }
@@ -43,9 +47,10 @@ QtObject {
     // every instance bob.toml asks for, switched on or not: {server, url, plugin}
     readonly property var all: Plugins.servers.filter(server => server.plugin && plugin(server.plugin))
         .map(server => ({ server: server.name, url: server.url, plugin: plugin(server.plugin) }))
-    // servers that name a plugin the app does not have: {server, plugin}
-    readonly property var missing: Plugins.servers.filter(server => server.plugin && !known[server.plugin])
-        .map(server => ({ server: server.name, plugin: server.plugin }))
+    // servers that name a plugin the app does not have, or one that did not load: {server, plugin,
+    // error}
+    readonly property var missing: Plugins.servers.filter(server => server.plugin && !plugin(server.plugin))
+        .map(server => ({ server: server.name, plugin: server.plugin, error: failed[server.plugin] ?? "" }))
     readonly property var enabled: {
         revision
         return all.filter(instance => Plugins.isEnabled(instance.server))
