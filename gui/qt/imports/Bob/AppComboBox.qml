@@ -48,7 +48,8 @@ ComboBox {
     delegate: ItemDelegate {
         required property var modelData
         required property int index
-        width: control.popup.width
+        // the list inside the popup's padding
+        width: control.popup.availableWidth
         height: 28
         highlighted: control.highlightedIndex === index
         contentItem: Text {
