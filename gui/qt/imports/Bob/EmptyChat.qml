@@ -28,7 +28,8 @@ Item {
         }
         GridLayout {
             Layout.fillWidth: true
-            columns: width >= 3 * 220 ? 3 : 1
+            // as many columns of at least 220 px as fit
+            columns: Math.max(1, Math.floor((width + columnSpacing) / (220 + columnSpacing)))
             columnSpacing: 8
             rowSpacing: 8
             Repeater {
