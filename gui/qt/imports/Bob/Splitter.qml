@@ -57,6 +57,10 @@ Item {
                 Prefs.setWidth(splitter.key, splitter.dragging)
             splitter.dragging = -1
         }
-        onDoubleClicked: Prefs.setWidth(splitter.key, -1)
+        // the release that follows must not store the width again
+        onDoubleClicked: {
+            splitter.dragging = -1
+            Prefs.setWidth(splitter.key, -1)
+        }
     }
 }
