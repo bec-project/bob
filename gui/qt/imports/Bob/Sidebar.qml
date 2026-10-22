@@ -31,7 +31,9 @@ Rectangle {
             spacing: 8
             Image {
                 source: "images/bob.png"
-                sourceSize: Qt.size(20, 20)
+                // the full 128 px image, scaled down smoothly: a 20 px decode is blurry on HiDPI screens
+                mipmap: true
+                fillMode: Image.PreserveAspectFit
                 Layout.preferredWidth: 20
                 Layout.preferredHeight: 20
             }

@@ -55,7 +55,8 @@ Item {
                         spacing: 10
                         Image {
                             source: "images/bob.png"
-                            sourceSize: Qt.size(26, 26)
+                            mipmap: true
+                            fillMode: Image.PreserveAspectFit
                             Layout.preferredWidth: 26
                             Layout.preferredHeight: 26
                         }
