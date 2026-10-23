@@ -55,9 +55,11 @@ QString defaultBinary()
             return beside;
     }
 #ifdef BOB_SOURCE_ROOT
-    const QString built = QStringLiteral(BOB_SOURCE_ROOT "/build/bob-manager");
-    if (isExecutable(built))
-        return QFileInfo(built).canonicalFilePath();
+    // the source tree's builds: build/bob-manager, then the repository root's bob
+    for (const QString &built : {QStringLiteral(BOB_SOURCE_ROOT "/build/bob-manager"), QStringLiteral(BOB_SOURCE_ROOT "/bob")}) {
+        if (isExecutable(built))
+            return QFileInfo(built).canonicalFilePath();
+    }
 #endif
     for (const QString &name : {QStringLiteral("bob-manager"), QStringLiteral("bob")}) {
         const QString found = findInPath(name);

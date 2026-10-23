@@ -150,7 +150,7 @@ Item {
                             id: binaryField
                             Layout.fillWidth: true
                             text: Bob.binary
-                            placeholderText: Bob.defaultBinary || qsTr("bob-manager on the PATH")
+                            placeholderText: Bob.defaultBinary || qsTr("bob-manager or bob on the PATH")
                         }
                         AppButton {
                             text: qsTr("Choose…")

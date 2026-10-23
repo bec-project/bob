@@ -33,7 +33,7 @@ in `settings.json`, in `~/.config/ch.psi.bob` on Linux and `~/Library/Applicatio
 Support/ch.psi.bob` on macOS: the same file as the Tauri desktop app, so both start bob
 the same way. Look and layout are kept with QSettings. The executable defaults to `$BOB_BIN`, then
 `bob-manager` beside the app, then (in a build from a checkout) the checkout's
-`build/bob-manager`, then `bob-manager` or `bob` on the PATH. bob-manager and bob's image are
+`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. bob-manager and bob's image are
 installed separately.
 
 ## Build and run
