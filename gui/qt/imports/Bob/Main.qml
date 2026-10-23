@@ -38,13 +38,15 @@ ApplicationWindow {
         link: Theme.accentText
     }
 
+    // On macOS Qt reads Ctrl as ⌘; Meta, the Control key there, works as well.
+    readonly property bool mac: Qt.platform.os === "osx"
     Shortcut {
-        sequence: "Ctrl+Shift+O"
+        sequences: window.mac ? ["Ctrl+Shift+O", "Meta+Shift+O"] : ["Ctrl+Shift+O"]
         enabled: Chat.phase === "ready"
         onActivated: Chat.selectSession("")
     }
     Shortcut {
-        sequence: "Ctrl+,"
+        sequences: window.mac ? ["Ctrl+,", "Meta+,"] : ["Ctrl+,"]
         enabled: Chat.phase === "ready"
         onActivated: settings.open()
     }

@@ -9,11 +9,12 @@ Item {
     visible: Chat.permissions.length + Chat.questions.length > 0
     implicitHeight: visible ? column.implicitHeight : 0
 
-    // Ctrl+Enter (⌘↵ on macOS) allows the oldest request once, wherever the focus is: a shortcut
-    // comes before the composer, whose Enter would otherwise send the draft
+    // Ctrl+Enter (⌘↵ or ⌃↵ on macOS) allows the oldest request once, wherever the focus is: a
+    // shortcut comes before the composer, whose Enter would otherwise send the draft
     Shortcut {
         id: allow
-        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        sequences: Qt.platform.os === "osx" ? ["Ctrl+Return", "Ctrl+Enter", "Meta+Return", "Meta+Enter"]
+                                            : ["Ctrl+Return", "Ctrl+Enter"]
         enabled: permissions.count > 0
         onActivated: {
             const card = permissions.itemAt(0)
