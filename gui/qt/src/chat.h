@@ -124,7 +124,9 @@ public:
     Q_INVOKABLE void disconnect();
     // Opens a chat; an empty id starts a new one.
     Q_INVOKABLE void selectSession(const QString &id);
-    Q_INVOKABLE void send(const QString &text);
+    // Sends a prompt to the open chat, or to a new one. `typed` prompts (from the composer) are
+    // remembered for Up in a new chat; suggestions and plugins' prompts are not.
+    Q_INVOKABLE void send(const QString &text, bool typed = false);
     Q_INVOKABLE void abort();
     Q_INVOKABLE void renameSession(const QString &id, const QString &title);
     Q_INVOKABLE void deleteSession(const QString &id);

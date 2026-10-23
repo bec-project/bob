@@ -23,7 +23,7 @@ Item {
         if (!value || !ready)
             return
         setText("")
-        Chat.send(value)
+        Chat.send(value, true)
     }
     function step(up) {
         if (input.selectedText !== "")

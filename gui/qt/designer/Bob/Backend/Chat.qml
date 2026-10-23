@@ -81,7 +81,7 @@ QtObject {
     function leaveBob() {}
     function disconnect() {}
     function selectSession(id) { currentId = id }
-    function send(text) {}
+    function send(text, typed) {}
     function abort() {}
     function renameSession(id, title) {}
     function deleteSession(id) {}

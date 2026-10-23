@@ -958,13 +958,14 @@ void Chat::selectSession(const QString &id)
     touch(SessionList | Thread | Current | Usage | Requests | Todos | Changes);
 }
 
-void Chat::send(const QString &text)
+void Chat::send(const QString &text, bool typed)
 {
     OpencodeApi *api = m_api;
     const QString prompt = text.trimmed();
     if (!api || prompt.isEmpty())
         return;
-    m_sent << prompt;
+    if (typed)
+        m_sent << prompt;
     m_recall = {};
     auto submit = [this, api, text](const QString &sessionID) {
         const ModelRef model = activeModelRef();
