@@ -64,6 +64,12 @@ Item {
             color: Theme.text
             font.pixelSize: 14
             elide: Text.ElideRight
+            HoverHandler {
+                id: titleHover
+            }
+            ToolTip.visible: titleHover.hovered && !!row.title
+            ToolTip.text: row.title
+            ToolTip.delay: 800
         }
         Text {
             visible: !hover.hovered

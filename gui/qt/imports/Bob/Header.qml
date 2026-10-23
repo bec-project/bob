@@ -83,6 +83,12 @@ Rectangle {
                         id: modelChip
                         anchors.verticalCenter: parent.verticalCenter
                         text: Chat.activeModelLabel
+                        HoverHandler {
+                            id: modelHover
+                        }
+                        ToolTip.visible: modelHover.hovered && Chat.activeModel !== ""
+                        ToolTip.text: Chat.activeModel
+                        ToolTip.delay: 500
                     }
                 }
                 AppComboBox {

@@ -251,6 +251,12 @@ Item {
                                     color: Theme.text3
                                     font.pixelSize: 12
                                     elide: Text.ElideMiddle
+                                    HoverHandler {
+                                        id: workspaceHover
+                                    }
+                                    ToolTip.visible: workspaceHover.hovered && !!modelData.workspace
+                                    ToolTip.text: modelData.workspace ?? ""
+                                    ToolTip.delay: 500
                                 }
                             }
                             AppButton {

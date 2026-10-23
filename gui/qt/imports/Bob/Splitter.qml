@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import Bob.Backend
 
 // A drag handle along the edge of the chat list or a side panel. The width it sets is kept in
@@ -20,6 +21,9 @@ Item {
     property int startWidth
 
     width: 7
+    ToolTip.visible: area.containsMouse && dragging < 0
+    ToolTip.text: qsTr("Drag to resize; double-click for the default width")
+    ToolTip.delay: 800
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     x: side === "right" ? parent.width - 4 : -3

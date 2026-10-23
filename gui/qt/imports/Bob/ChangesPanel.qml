@@ -115,6 +115,12 @@ Rectangle {
                         font.weight: Font.Medium
                         elide: Text.ElideRight
                         maximumLineCount: 1
+                        HoverHandler {
+                            id: promptHover
+                        }
+                        ToolTip.visible: promptHover.hovered && !!change.modelData.prompt
+                        ToolTip.text: change.modelData.prompt ?? ""
+                        ToolTip.delay: 800
                     }
                     Chip {
                         visible: change.modelData.undone

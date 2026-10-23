@@ -137,10 +137,9 @@ Rectangle {
         textFormat: Text.StyledText
         HoverHandler {
             id: statHover
-            enabled: parent.tip !== ""
         }
         ToolTip.visible: statHover.hovered
-        ToolTip.text: tip
+        ToolTip.text: tip || qsTr("Totals for this chat")
         ToolTip.delay: 500
     }
     component Separator: Rectangle {

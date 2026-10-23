@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Bob.Backend
 
@@ -60,6 +61,13 @@ Rectangle {
                 Text {
                     text: call.item.label
                     textFormat: Text.PlainText
+                    // the tool's own id, as OpenCode names it
+                    HoverHandler {
+                        id: labelHover
+                    }
+                    ToolTip.visible: labelHover.hovered && !!call.item.tool
+                    ToolTip.text: call.item.tool ?? ""
+                    ToolTip.delay: 800
                     color: Theme.text
                     font.pixelSize: 14
                     font.weight: Font.Medium
