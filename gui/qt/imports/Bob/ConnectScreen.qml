@@ -322,6 +322,7 @@ Item {
                             visible: screen.looksLikeUrl
                             Layout.fillWidth: true
                             echoMode: TextInput.Password
+                            onAccepted: if (screen.manualReady) Chat.connectTo(screen.connection)
                         }
                         RowLayout {
                             Layout.topMargin: 18
@@ -350,7 +351,7 @@ Item {
     FileDialog {
         id: configDialog
         title: qsTr("Choose a bob.toml")
-        nameFilters: [qsTr("bob configuration (*.toml)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("bob configuration (*.toml)")]
         onAccepted: configField.text = Desktop.localPath(selectedFile)
     }
     FileDialog {
