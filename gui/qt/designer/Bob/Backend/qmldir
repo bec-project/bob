@@ -1,0 +1,6 @@
+module Bob.Backend
+singleton Bob 1.0 Bob.qml
+singleton Chat 1.0 Chat.qml
+singleton Desktop 1.0 Desktop.qml
+singleton Prefs 1.0 Prefs.qml
+MarkdownFormatter 1.0 MarkdownFormatter.qml

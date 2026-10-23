@@ -36,7 +36,9 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `launcher/container_manager/manager.go` — startup, helper lifecycle, cleanup, and readiness
 - `launcher/container_manager/runtime.go` — subprocess execution, cancellation, and failure classification
 - `launcher/cmd/container_manager/config.go` — TOML loading and relative paths
-- `launcher/cmd/container_manager/main.go` — arguments, signals, and connection output
+- `launcher/cmd/container_manager/main.go` — arguments, signals, and the broker-or-locate entry point
+- `launcher/cmd/container_manager/broker.go` — the per-user broker that runs one Manager for all of a
+  user's clients, and the locate step that starts it
 - `containers/network.py` and `containers/entrypoint.sh` — firewall bootstrap and privilege dropping
 - `containers/Dockerfile` and `containers/opencode.json` — image and OpenCode configuration
 - `launcher/container_manager/lifecycle_test.go` — fake engine and cleanup regression tests
@@ -48,10 +50,12 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
   - `launcher/container_manager/` — reusable Go package, named `containermanager`, and its tests
 - `containers/` — what bob ships as containers: the image build context, Python firewall bootstrap,
   shell entrypoint, and network tests
+- `gui/qt/` — the native desktop app (Qt 6.12, C++ and QML, CMake), which starts and holds bob and
+  chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
-- `ci/` — release binary packaging
+- `ci/` — release packaging: bob-manager archives, the Qt app's RPM and DMG
 
 Treat `launcher/go.mod` as the source of truth for Go dependencies and the minimum Go version.
 Treat `ruff.toml` as the source of truth for Python linting and formatting settings.
@@ -70,6 +74,16 @@ If you change:
   update `deploy/bob.example.toml` and the configuration table when public settings change.
 - `launch.go`: check Docker and Podman argument generation, identities, security options, mount
   flags, and helper commands. Preserve values without shell interpolation.
+- `broker.go`: test leases (two clients, one start, none before the first client), teardown after
+  the last client and the linger time, a killed client ending its lease, start failures reaching
+  every client, cancellation before Stop, the health watch (a stopped container ends every lease,
+  brief engine failures do not), and the one-broker lock; run the broker tests repeatedly
+  with `-race -count=5`. Keep clients in step with the protocol; the Qt app implements the client
+  side in `gui/qt/src/bobsession.cpp`.
+- `gui/qt/`: build and run the unit tests (`cmake --build build/qt && (cd build/qt &&
+  QT_QPA_PLATFORM=offscreen ctest --output-on-failure)`); keep `imports/Bob/qmldir` and the
+  stand-ins in `designer/Bob/Backend` in step with the QML files and the C++ API, so Qt Design Studio
+  still opens `bob.qmlproject`. Use only Qt's public API.
 - `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
   retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
 - `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,
@@ -166,7 +180,9 @@ directory for that command. Do not change global tooling configuration to run on
 
 For a local launch, build the image, copy `deploy/bob.example.toml` to the ignored `bob.toml`, and
 configure
-the workspace, engine, provider URL, and any token before running:
+the workspace, engine, provider URL, and any token. `bob-manager --config bob.toml` makes sure your
+broker runs and prints its socket; bob starts when a client connects there (see
+`launcher/container_manager/README.md#how-bob-runs`):
 
 ```bash
 go -C launcher build -o ../build/bob-manager ./cmd/container_manager

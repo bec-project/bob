@@ -123,6 +123,32 @@ func (m *Manager) Start(parent context.Context, input Options) (connection Conne
 	return connection, nil
 }
 
+// ErrStopped marks a Check that found bob gone: its container stopped or was removed, or one of
+// its host MCP servers exited.
+var ErrStopped = errors.New("bob stopped")
+
+// Check reports whether the started backend still runs: nil while it does, an error wrapping
+// ErrStopped once it does not, and any other error when the engine could not tell.
+func (m *Manager) Check(ctx context.Context) error {
+	if err := m.hostMCPError(); err != nil {
+		return fmt.Errorf("%w: %v", ErrStopped, err)
+	}
+	if m.name == "" {
+		return fmt.Errorf("%w: no container was started", ErrStopped)
+	}
+	state, err := command(ctx, m.binary, nil, "inspect", "--format", "{{.State.Running}}", m.name)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "no such") {
+			return fmt.Errorf("%w: its container is gone", ErrStopped)
+		}
+		return err
+	}
+	if state != "true" {
+		return fmt.Errorf("%w: its container is not running", ErrStopped)
+	}
+	return nil
+}
+
 func (m *Manager) createContainer(ctx context.Context, binary, launchID string, env []string, args ...string) error {
 	if err := ctx.Err(); err != nil {
 		return err

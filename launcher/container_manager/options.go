@@ -9,10 +9,13 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 var resourceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
@@ -27,7 +30,6 @@ type MCPServer struct {
 }
 
 type Options struct {
-	Web         bool
 	Image       string
 	HomeVolume  string
 	Name        string
@@ -60,10 +62,29 @@ func DefaultOptions() Options {
 	return Options{
 		Runtime:     "podman",
 		Image:       "localhost/bob",
-		HomeVolume:  "bob-cli-home",
+		HomeVolume:  defaultHomeVolume(),
 		Model:       "Qwen3.8-27B",
 		BindAddress: "0.0.0.0",
 	}
+}
+
+// defaultHomeVolume names one home volume per user, so users of one engine never share
+// sessions or file ownership.
+func defaultHomeVolume() string {
+	name := ""
+	if current, err := user.Current(); err == nil {
+		name = current.Username
+	}
+	name = strings.Map(func(r rune) rune {
+		if r < utf8.RuneSelf && (r == '_' || r == '.' || r == '-' || unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return r
+		}
+		return '-'
+	}, name)
+	if name == "" {
+		name = strconv.Itoa(os.Getuid())
+	}
+	return "bob-" + name + "-home"
 }
 
 func (input Options) validate() error {
