@@ -7,7 +7,10 @@ import Bob.Backend
 Rectangle {
     id: panel
 
-    width: splitter.size
+    // the width the user gave it
+    readonly property int size: splitter.size
+
+    width: size
     color: Theme.surface
 
     Rectangle {

@@ -2,21 +2,27 @@ import QtQuick
 import QtQuick.Layouts
 import Bob.Backend
 
-// The chat: the chat list, the open chat with its composer, and the side panels.
+// The chat: the chat list, the open chat with its composer, and the side panels. Below 900 px the
+// chat list and the open side panel float over the chat instead of narrowing it.
 Item {
     id: view
 
     signal settingsRequested()
 
+    readonly property bool narrow: width < 900
+    readonly property int railWidth: 42
+    // at most this wide when it floats
+    readonly property int floatingWidth: Math.min(340, width)
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
-        Sidebar {
-            visible: Prefs.sidebar
+        // the chat list's place, when there is room for it
+        Item {
+            visible: sidebar.visible && !view.narrow
             Layout.fillHeight: true
-            Layout.preferredWidth: width
-            onSettingsRequested: view.settingsRequested()
+            Layout.preferredWidth: sidebar.width
         }
 
         ColumnLayout {
@@ -62,16 +68,17 @@ Item {
             }
         }
 
-        ChangesPanel {
-            visible: Prefs.panel === "core/changes"
+        // the open side panel's place, when there is room for it
+        Item {
+            visible: panels.open && !view.narrow
             Layout.fillHeight: true
-            Layout.preferredWidth: width
+            Layout.preferredWidth: panels.width
         }
 
         // the panel rail
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: 42
+            Layout.preferredWidth: view.railWidth
             color: Theme.surface2
             Rectangle {
                 width: 1
@@ -109,6 +116,60 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    Sidebar {
+        id: sidebar
+        visible: Prefs.sidebar
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        z: 2
+        onSettingsRequested: view.settingsRequested()
+    }
+    Shade {
+        visible: sidebar.visible && view.narrow
+        anchors.left: sidebar.right
+        z: 2
+        toRight: true
+    }
+
+    // the open side panel: left of the rail, or at the window's right edge when it floats
+    Item {
+        id: panels
+        readonly property bool open: changes.visible
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        anchors.rightMargin: view.narrow ? 0 : view.railWidth
+        width: changes.visible ? changes.width : 0
+        z: 2
+
+        ChangesPanel {
+            id: changes
+            visible: Prefs.panel === "core/changes"
+            height: parent.height
+            width: view.narrow ? view.floatingWidth : size
+        }
+    }
+    Shade {
+        visible: panels.open && view.narrow
+        anchors.right: panels.left
+        z: 2
+        toRight: false
+    }
+
+    // the soft edge of a floating chat list or panel, over the chat
+    component Shade: Rectangle {
+        property bool toRight
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: 12
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: toRight ? Theme.shadow : "transparent" }
+            GradientStop { position: 1; color: toRight ? "transparent" : Theme.shadow }
         }
     }
 }
