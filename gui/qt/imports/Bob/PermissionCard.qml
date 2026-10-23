@@ -17,6 +17,9 @@ RequestCard {
         Chat.replyPermission(request.id, reply)
     }
 
+    // a new request takes the keyboard, so Enter allows it once
+    Component.onCompleted: allowOnce.forceActiveFocus(Qt.TabFocusReason)
+
     // the request stays open when the reply fails: answer it again
     Connections {
         target: Chat
@@ -78,6 +81,7 @@ RequestCard {
         Layout.topMargin: 4
         spacing: 8
         AppButton {
+            id: allowOnce
             text: qsTr("Allow once")
             variant: "primary"
             enabled: !card.answering

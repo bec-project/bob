@@ -27,6 +27,10 @@ Button {
     ToolTip.text: tip
     ToolTip.delay: 500
 
+    // Enter presses a focused button too, not only Space
+    Keys.onReturnPressed: if (enabled) clicked()
+    Keys.onEnterPressed: if (enabled) clicked()
+
     contentItem: RowLayout {
         spacing: 6
         Icon {
@@ -58,5 +62,16 @@ Button {
         border.width: control.variant === "ghost" ? 0 : 1
         border.color: control.variant === "primary" ? Theme.accent
             : control.hovered && control.enabled ? Theme.borderStrong : Theme.border
+        // the keyboard focus
+        Rectangle {
+            visible: control.visualFocus
+            anchors.fill: parent
+            anchors.margins: -3
+            radius: parent.radius + 3
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.accent
+            opacity: 0.6
+        }
     }
 }
