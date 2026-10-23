@@ -340,6 +340,27 @@ void TestLogic::makesToolTextReadable()
     QCOMPARE(ChatLogic::noThinkingVariant(json(R"({"variants":{"fast":{},"no-thinking":{}}})")), QStringLiteral("no-thinking"));
 }
 
+void TestLogic::opensACompactionSummaryOntoAllItsParts()
+{
+    MessageEntry prompt = user("msg_1", 1000, "Compact");
+    MessageEntry summary = assistant("msg_2", "msg_1", 1100, 1300);
+    summary.info.insert("summary", true);
+    summary.parts = {json(R"({"id":"prt_r","type":"reasoning","text":"Sorting","time":{"start":1100,"end":1150}})"),
+                     json(R"({"id":"prt_t","type":"tool","tool":"read","callID":"c1","state":{"status":"completed","input":{},"output":"x","time":{"start":1160,"end":1170}}})"),
+                     json(R"({"id":"prt_x","type":"text","text":"So far: the broker."})")};
+    QList<MessageEntry> entries = {prompt, summary};
+    QHash<QString, bool> expanded;
+    ThreadModel model(false);
+    ThreadModel::Input input;
+    input.entries = &entries;
+    input.expanded = &expanded;
+    model.update(input);
+    QCOMPARE(kinds(model), (QStringList{"user", "summary", "footer"}));
+    expanded.insert(QStringLiteral("s:msg_2"), true);
+    model.update(input);
+    QCOMPARE(kinds(model), (QStringList{"user", "summary", "thinking", "tool", "markdown", "footer"}));
+}
+
 void TestLogic::buildsTheThreadsRows()
 {
     MessageEntry prompt = user("msg_1", 1000, "Explain");

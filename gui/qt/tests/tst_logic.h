@@ -28,6 +28,7 @@ private slots:
     void describesPermissionRequests();
     void makesToolTextReadable();
     void buildsTheThreadsRows();
+    void opensACompactionSummaryOntoAllItsParts();
     void showsAnEmptyChatAndASubAgentsSteps();
     void readsAndSavesSettings();
     void readsAConnectionFromInspect();

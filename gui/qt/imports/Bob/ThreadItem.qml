@@ -147,15 +147,11 @@ Item {
                 y: 8
                 width: parent.width - 24
                 spacing: 6
+                // open, the summary's parts follow as rows of their own
                 Disclosure {
                     text: qsTr("Summary of the earlier chat")
                     open: row.item.expanded
                     onToggled: Chat.setExpanded(row.key, !row.item.expanded)
-                }
-                MarkdownView {
-                    visible: row.item.expanded
-                    Layout.fillWidth: true
-                    markdown: row.item.text
                 }
             }
         }

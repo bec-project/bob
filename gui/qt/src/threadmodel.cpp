@@ -262,16 +262,14 @@ void ThreadModel::addStep(QList<Row> &rows, const Input &input, const MessageEnt
 {
     const QString id = step.id();
     if (step.info.value(QStringLiteral("summary")).toBool()) {
-        QStringList texts;
-        for (const QJsonObject &part : step.parts) {
-            if (str(part, "type") == QStringLiteral("text") && !str(part, "text").trimmed().isEmpty())
-                texts << str(part, "text");
-        }
+        // a compaction's summary: a heading that opens onto every part of the step, as written
         const QString key = QStringLiteral("s:") + id;
-        rows << row(key, QStringLiteral("summary"),
-                    {{QStringLiteral("text"), texts.join(QStringLiteral("\n\n"))},
-                     {QStringLiteral("expanded"), input.expanded ? input.expanded->value(key, false) : false}},
-                    undone);
+        const bool expanded = input.expanded ? input.expanded->value(key, false) : false;
+        rows << row(key, QStringLiteral("summary"), {{QStringLiteral("expanded"), expanded}}, undone);
+        if (expanded) {
+            for (const QJsonObject &part : step.parts)
+                addPart(rows, input, part, live, undone);
+        }
     } else {
         for (const QJsonObject &part : step.parts)
             addPart(rows, input, part, live, undone);
