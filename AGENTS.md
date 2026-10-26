@@ -4,8 +4,8 @@
 follow existing local patterns, and preserve lifecycle cleanup and the sandbox's isolation policy.
 
 This file is an agent-oriented operating manual. Human-facing documentation lives in
-[`README.md`](README.md) and [`launcher/sandbox/README.md`](launcher/sandbox/README.md).
-Configuration examples live in `deploy/bob.example.toml`.
+[`README.md`](README.md), [`launcher/sandbox/README.md`](launcher/sandbox/README.md), and
+[`gui/qt/README.md`](gui/qt/README.md). Configuration examples live in `deploy/bob.example.toml`.
 
 ## Core Rules
 
@@ -81,6 +81,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
   - `launcher/cmd/bob-manager/` — Go executable and CLI/configuration tests
   - `launcher/sandbox/` — reusable Go package, named `sandbox` (bob's sandbox
     manager), and its tests
+- `gui/qt/` — the native desktop app (Qt 6.12, C++ and QML, CMake), which starts and holds bob and
+  chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
@@ -116,7 +118,12 @@ If you change:
   every client, cancellation before Stop, the health watch (an exited sandbox ends every lease,
   a few checks that cannot tell do not), a client's stop request and the reason every lease gets,
   and the one-broker lock; run the broker tests repeatedly
-  with `-race -count=5`. Keep clients in step with the protocol.
+  with `-race -count=5`. Keep clients in step with the protocol; the Qt app implements the client
+  side in `gui/qt/src/bob/bobsession.cpp`.
+- `gui/qt/`: build and run the unit tests (`cmake --build build/qt && (cd build/qt &&
+  QT_QPA_PLATFORM=offscreen ctest --output-on-failure)`); keep `imports/Bob/qmldir` and the
+  stand-ins in `designer/Bob/Backend` in step with the QML files and the C++ API, so Qt Design Studio
+  still opens `bob.qmlproject`. Use only Qt's public API.
 - `manager.go`, `host_mcp.go` or `runtime.go`: test startup failure, cancellation, a sandbox that
   exits before readiness, a host MCP server that exits, cleanup retries, and process-group
   cleanup. Run Go race tests.
