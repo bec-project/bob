@@ -1,0 +1,44 @@
+module Bob
+AppButton 1.0 AppButton.qml
+AppComboBox 1.0 AppComboBox.qml
+AppTextField 1.0 AppTextField.qml
+Banner 1.0 Banner.qml
+ChangesPanel 1.0 ChangesPanel.qml
+ChatView 1.0 ChatView.qml
+Chip 1.0 Chip.qml
+singleton Clock 1.0 Clock.qml
+CodeBlock 1.0 CodeBlock.qml
+Composer 1.0 Composer.qml
+ConfirmDialog 1.0 ConfirmDialog.qml
+ConnectScreen 1.0 ConnectScreen.qml
+CopyButton 1.0 CopyButton.qml
+Disclosure 1.0 Disclosure.qml
+Dot 1.0 Dot.qml
+EmptyChat 1.0 EmptyChat.qml
+Header 1.0 Header.qml
+Icon 1.0 Icon.qml
+IconButton 1.0 IconButton.qml
+Kbd 1.0 Kbd.qml
+Main 1.0 Main.qml
+MarkdownView 1.0 MarkdownView.qml
+McpChip 1.0 McpChip.qml
+PermissionCard 1.0 PermissionCard.qml
+QuestionCard 1.0 QuestionCard.qml
+RequestCard 1.0 RequestCard.qml
+Requests 1.0 Requests.qml
+SessionRow 1.0 SessionRow.qml
+SettingsDialog 1.0 SettingsDialog.qml
+Sidebar 1.0 Sidebar.qml
+Spinner 1.0 Spinner.qml
+Splitter 1.0 Splitter.qml
+SubAgentRun 1.0 SubAgentRun.qml
+singleton Theme 1.0 Theme.qml
+ThinkingBlock 1.0 ThinkingBlock.qml
+ThreadItem 1.0 ThreadItem.qml
+ThreadView 1.0 ThreadView.qml
+Todos 1.0 Todos.qml
+ToggleSwitch 1.0 ToggleSwitch.qml
+ToolCall 1.0 ToolCall.qml
+TurnFooter 1.0 TurnFooter.qml
+UsageBar 1.0 UsageBar.qml
+Working 1.0 Working.qml
