@@ -1,0 +1,33 @@
+import QmlProject
+
+// Qt Design Studio's view of the app: the QML module in imports/Bob, with designer/Bob/Backend
+// standing in for the C++ backend (the real app is the CMake project in this folder).
+Project {
+    mainFile: "designer/Preview.qml"
+
+    QmlFiles {
+        directory: "imports"
+    }
+    QmlFiles {
+        directory: "designer"
+    }
+    ImageFiles {
+        directory: "icons"
+    }
+    Files {
+        filter: "qmldir"
+        directory: "."
+    }
+    Files {
+        filter: "*.conf"
+        files: ["qtquickcontrols2.conf"]
+    }
+
+    Environment {
+        QT_QUICK_CONTROLS_CONF: "qtquickcontrols2.conf"
+        QT_LOGGING_RULES: "qt.qml.connections=false"
+    }
+
+    qt6Project: true
+    importPaths: ["imports", "designer"]
+}
