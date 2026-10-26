@@ -14,10 +14,16 @@ jobs:
         with:
           go-version-file: launcher/go.mod
           cache-dependency-path: launcher/go.sum
-      - name: Check Linux and macOS cross-compilation
+      - name: Build bob-manager for Linux and macOS
         working-directory: launcher
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" \
-              go build -o /dev/null ./cmd/container_manager
+              go build -trimpath -o "../dist/bob-manager_${target%/*}_${target#*/}" ./cmd/container_manager
           done
+      # so a branch's bob-manager can be tried before a release (artifacts drop the executable bit)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bob-manager
+          path: dist/bob-manager_*
+          if-no-files-found: error

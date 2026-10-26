@@ -29,7 +29,7 @@ the connection a client receives as a credential. For host-only access, set
 | --- | --- |
 | `launcher/` | Go module: the `bob-manager` CLI (`cmd/container_manager`) and the `containermanager` package |
 | `containers/` | What bob ships as containers: the OpenCode image's Dockerfile, firewall bootstrap, entrypoint and OpenCode configuration |
-| `gui/qt/` | The desktop app (Qt 6, C++ and QML): starts and holds bob, and chats with it |
+| `gui/qt/` | The desktop app (Qt 6, C++ and QML): starts and holds bob, and chats with it; RPM for RHEL 9 and a macOS DMG |
 | `deploy/` | Deployment configuration: the annotated `bob.example.toml` |
 | `ci/`, `.github/` | Release tooling and CI workflows |
 
@@ -38,7 +38,7 @@ the connection a client receives as a credential. For host-only access, set
 - [Configuration example](deploy/bob.example.toml) — settings and defaults
 - [Container manager](launcher/container_manager/README.md) — configuration, network policy, isolation limits, and testing
 - [Container image](containers/README.md) — building and bootstrap
-- [Desktop app](gui/qt/README.md) — features, building, Qt Creator and Design Studio
+- [Desktop app](gui/qt/README.md) — features, building, Qt Creator and Design Studio, released bundles
 
 The firewall filters IP addresses and ports, not domains or URL paths. Review the
 [isolation limits](launcher/container_manager/README.md#isolation-limits) before choosing mounts.

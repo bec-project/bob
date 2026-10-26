@@ -72,10 +72,22 @@ claude mcp add qmlpreview ~/Qt/6.12.0/macos/bin/QmlPreviewMcpServer
 | `imports/Bob/` | The window, QML module `Bob`; `qmldir` lets Design Studio read it from the source tree |
 | `designer/` | Design Studio's preview and stand-ins for `Bob.Backend` |
 | `tests/` | Unit tests (Qt Test) |
-| `packaging/` | The desktop entry and AppStream metadata |
+| `packaging/` | The RPM spec and the desktop entry |
 
 ## Checks
 
 ```sh
 cmake --build build/qt && (cd build/qt && QT_QPA_PLATFORM=offscreen ctest --output-on-failure)
 ```
+
+## Released bundles
+
+Each bob release also carries this app, built by [`qt_desktop.yml`](../../.github/workflows/qt_desktop.yml),
+on the GitHub release and in Gitea (package `bob`, and the RPM in the `bec` RPM registry):
+
+- `bob-gui-<version>-1.el9.x86_64.rpm`: RHEL 9. RHEL 9 has no Qt 6.12 (EPEL 9 ships 6.10), so the
+  RPM carries Qt's official binaries in `/opt/bob-gui`, with `bob-gui` on the PATH. It needs only
+  base RHEL 9 packages.
+- `bob-gui_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with Qt inside the app. It is
+  signed ad hoc, so macOS blocks its first start: allow it under System Settings → Privacy &
+  Security, or run `xattr -dr com.apple.quarantine /Applications/bob-gui.app`.
