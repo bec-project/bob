@@ -360,7 +360,8 @@ restart the broker so already-running processes use the new runtime and policy.
 
 Main-branch releases run only after CI passes. Semantic release creates the version tag
 and GitHub binary assets; delivery downloads those original assets, verifies their
-checksums, and uploads them to Gitea.
+checksums, and uploads them to Gitea. The desktop app's bundles follow (see
+[released bundles](../../gui/qt/README.md#released-bundles)).
 If delivery fails, rerun the failed workflow jobs. An existing release tag on the same
 CI-tested commit is reused; identical files already in Gitea are accepted, while
 conflicting files fail delivery. No new release commit or version is needed for a retry.

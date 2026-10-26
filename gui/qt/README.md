@@ -33,8 +33,9 @@ in `settings.json`, in `~/.config/ch.psi.bob` on Linux and `~/Library/Applicatio
 Support/ch.psi.bob` on macOS: the same file as the Tauri desktop app, so both start bob
 the same way. Look and layout are kept with QSettings. The executable defaults to `$BOB_BIN`, then
 `bob-manager` beside the app, then (in a build from a checkout) the checkout's
-`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. bob-manager and OpenCode are
-installed separately, and bob itself runs on Linux only (see its
+`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. The RPM installs
+bob-manager and OpenCode with the app; elsewhere they are installed separately, and bob itself
+runs on Linux only (see its
 [runtime requirements](../../launcher/sandbox/README.md#runtime-requirements)).
 
 ## Build and run
@@ -73,10 +74,25 @@ claude mcp add qmlpreview ~/Qt/6.12.0/macos/bin/QmlPreviewMcpServer
 | `imports/Bob/` | The window, QML module `Bob`; `qmldir` lets Design Studio read it from the source tree |
 | `designer/` | Design Studio's preview and stand-ins for `Bob.Backend` |
 | `tests/` | Unit tests (Qt Test) |
-| `packaging/` | The desktop entry and AppStream metadata |
+| `packaging/` | The RPM spec and the desktop entry |
 
 ## Checks
 
 ```sh
 cmake --build build/qt && (cd build/qt && QT_QPA_PLATFORM=offscreen ctest --output-on-failure)
 ```
+
+## Released bundles
+
+Each bob release also carries this app, built by [`qt_desktop.yml`](../../.github/workflows/qt_desktop.yml),
+on the GitHub release and in Gitea (package `bob`, and the RPM in the `bec` RPM registry):
+
+- `bob-gui-<version>-1.el9.x86_64.rpm`: RHEL 9. RHEL 9 has no Qt 6.12 (EPEL 9 ships 6.10), so the
+  RPM carries Qt's official binaries in `/opt/bob-gui`, with `bob-gui` on the PATH, and
+  bob-manager (also on the PATH) and the pinned OpenCode release (`/opt/bob-gui/libexec`, MIT
+  license in `/opt/bob-gui/licenses/opencode`), so nothing else is installed by hand. It needs only
+  RHEL 9 packages, `bubblewrap`, `socat` and Node.js 22 (`dnf module enable nodejs:22` first)
+  among them for bob's sandbox, and carries sandbox-runtime and ripgrep too.
+- `bob-gui_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with Qt inside the app. It is
+  signed ad hoc, so macOS blocks its first start: allow it under System Settings → Privacy &
+  Security, or run `xattr -dr com.apple.quarantine /Applications/bob-gui.app`.
