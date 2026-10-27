@@ -69,7 +69,7 @@ func sandboxTestOptions(t *testing.T) resolvedOptions {
 
 func TestSandboxSeesOnlyWhatItIsGiven(t *testing.T) {
 	options := sandboxTestOptions(t)
-	args := getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode")
+	args := getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode", selinuxLabels{})
 	command := strings.Join(args, " ")
 	for _, value := range []string{
 		"--unshare-all", "--die-with-parent", "--new-session", "--seccomp 3",
@@ -91,6 +91,18 @@ func TestSandboxSeesOnlyWhatItIsGiven(t *testing.T) {
 	}
 	if strings.Contains(command, options.APIKey) || strings.Contains(command, options.password) {
 		t.Fatal("secret in the command line")
+	}
+}
+
+func TestSandboxRunsWithItsSELinuxLabel(t *testing.T) {
+	options := sandboxTestOptions(t)
+	labels := newSELinuxLabels(1000)
+	command := strings.Join(getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode", labels), " ")
+	if !strings.Contains(command, "--exec-label "+labels.process+" --file-label "+labels.file) {
+		t.Fatalf("no SELinux labels in %s", command)
+	}
+	if strings.Contains(strings.Join(getSandboxArgs(options, "/run/x", "/b", "/o", selinuxLabels{}), " "), "label") {
+		t.Fatal("labels without SELinux")
 	}
 }
 

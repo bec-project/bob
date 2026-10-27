@@ -31,8 +31,9 @@ BuildRequires:  mesa-libEGL-devel
 BuildRequires:  libxkbcommon-devel
 BuildRequires:  fontconfig
 BuildRequires:  dejavu-sans-fonts
-# bob-manager runs OpenCode in a bubblewrap sandbox
+# bob-manager runs OpenCode in a bubblewrap sandbox, as container_t where SELinux is on
 Requires:       bubblewrap
+Requires:       container-selinux
 
 %description
 A chat window for the OpenCode server that bob runs in a bubblewrap sandbox. The app

@@ -47,6 +47,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `launcher/container_manager/tunnel.go` — the Unix-socket tunnels and the helper that runs in the
   sandbox (`bob-manager --sandbox-helper`)
 - `launcher/container_manager/seccomp.go` — the sandbox's seccomp filter, per architecture
+- `launcher/container_manager/selinux.go`, `selinux_linux.go` — the sandbox's SELinux labels and
+  relabelling
 - `launcher/container_manager/manager.go` — the `Manager` API, connection JSON, and readiness
 - `launcher/container_manager/host_mcp.go` — host MCP servers: startup, readiness, and
   process-group cleanup
@@ -105,6 +107,9 @@ If you change:
   BPF interpreter, and on Linux check the numbers against Go's syscall table. Check a change on a
   real kernel: a refused call must fail with `EPERM` inside the sandbox, and OpenCode must still
   start and chat.
+- `selinux.go`: check on an enforcing host (AlmaLinux 9 with `container-selinux`): OpenCode must
+  run as `container_t`, reach its tunnels and the workspace, and chat; relabel only the user's own
+  files, and keep each file's SELinux user and role.
 - `opencode.json`: keep the `self-hosted` provider name and the variables it reads in step with
   `getOpenCodeEnvironment`.
 - `broker.go`: test leases (two clients, one start, none before the first client), teardown after
@@ -147,8 +152,8 @@ redirects. Startup errors include the sandbox's recent output, with the provider
 The sandbox has no network. It reaches the configured endpoints by host and port through
 bob-manager's tunnels and does not enforce URL paths. The agent runs as the user's UID, sees the
 host's `/usr` and readable `/etc`, holds the provider token in its environment, runs under a
-seccomp filter that refuses new namespaces, mounting and other rarely used kernel calls, and has
-no SELinux confinement yet. Preserve the documented policy and isolation limits
+seccomp filter that refuses new namespaces, mounting and other rarely used kernel calls, and,
+where SELinux is on, runs as `container_t` with the user's own categories. Preserve the documented policy and isolation limits
 rather than promising stronger guarantees. Host-control sockets remain dangerous even through
 read-only mounts.
 

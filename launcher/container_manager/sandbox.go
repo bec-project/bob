@@ -82,6 +82,24 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err := os.MkdirAll(options.Home, 0o700); err != nil {
 		return connection, fmt.Errorf("create bob's home folder: %w", err)
 	}
+	labels, err := getSELinuxLabels()
+	if err != nil {
+		return connection, err
+	}
+	// Under SELinux the sandbox may touch only what carries its label.
+	for _, mount := range options.mounts {
+		if err := labels.relabelTree(mount.path); err != nil {
+			return connection, err
+		}
+	}
+	if err := labels.relabelTree(options.Home); err != nil {
+		return connection, err
+	}
+	for _, executable := range []string{helper, openCode} {
+		if err := labels.relabelIfOwned(executable); err != nil {
+			return connection, err
+		}
+	}
 	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
 	defer cancel()
 	defer func() {
@@ -110,12 +128,12 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 		return connection, err
 	}
 	sandbox := &sandboxProcess{runDir: runDir, done: make(chan struct{}), output: &tailWriter{}}
+	m.sandbox = sandbox
 	// The sandbox may write only the sockets folder; its hosts file and configuration stay ours.
 	sockets := filepath.Join(runDir, "sockets")
 	if err := os.Mkdir(sockets, 0o700); err != nil {
 		return connection, err
 	}
-	m.sandbox = sandbox
 	hostsFile := "127.0.0.1 localhost\n::1 localhost\n" + strings.Join(hosts, "\n") + "\n"
 	if err := os.WriteFile(filepath.Join(runDir, "hosts"), []byte(hostsFile), 0o644); err != nil {
 		return connection, err
@@ -123,8 +141,16 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err := os.WriteFile(filepath.Join(runDir, "opencode.json"), openCodeConfig, 0o644); err != nil {
 		return connection, err
 	}
+	// The sockets made in the folder take its label.
+	if err := labels.relabelTree(runDir); err != nil {
+		return connection, err
+	}
 	for _, endpoint := range endpoints {
-		listener, err := net.Listen("unix", filepath.Join(sockets, endpoint.Socket))
+		var listener net.Listener
+		err := labels.listenUnix(func() (err error) {
+			listener, err = net.Listen("unix", filepath.Join(sockets, endpoint.Socket))
+			return err
+		})
 		if err != nil {
 			return connection, err
 		}
@@ -150,7 +176,7 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 		return connection, err
 	}
 	defer filterFile.Close()
-	sandbox.cmd = exec.Command(options.binary, getSandboxArgs(options, runDir, helper, openCode)...)
+	sandbox.cmd = exec.Command(options.binary, getSandboxArgs(options, runDir, helper, openCode, labels)...)
 	sandbox.cmd.Env = env
 	sandbox.cmd.ExtraFiles = []*os.File{filterFile}
 	sandbox.cmd.Stdout = io.MultiWriter(os.Stderr, sandbox.output)
@@ -362,12 +388,16 @@ func getSandboxEndpoints(urls []string) ([]sandboxEndpoint, map[string]string, [
 
 // getSandboxArgs is the bubblewrap command line. It carries no secrets: they go through the
 // environment.
-func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string) []string {
+func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string, labels selinuxLabels) []string {
 	args := []string{
 		"--unshare-all", "--die-with-parent", "--new-session", "--hostname", "bob",
 		"--seccomp", "3",
-		"--ro-bind", "/usr", "/usr",
 	}
+	if labels.on() {
+		// What the sandbox runs, and the files it makes in its own /tmp and /dev.
+		args = append(args, "--exec-label", labels.process, "--file-label", labels.file)
+	}
+	args = append(args, "--ro-bind", "/usr", "/usr")
 	// RHEL's /bin, /sbin, /lib and /lib64 point into /usr.
 	for _, directory := range []string{"/bin", "/sbin", "/lib", "/lib64"} {
 		info, err := os.Lstat(directory)

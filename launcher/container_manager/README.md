@@ -140,7 +140,19 @@ that reach the kernel's least-used and most attacked parts: new namespaces, moun
 keyring, BPF, perf, io_uring, userfaultfd, modules, kexec and the like (with `EPERM`; `clone3`
 with `ENOSYS`, so the C library falls back to `clone`, whose namespace flags the filter checks).
 Calls of another ABI, such as 32-bit x86 on x86_64, are refused. bob-manager builds the filter
-for x86_64 and arm64. It sees:
+for x86_64 and arm64.
+
+Where SELinux is on, the sandbox runs as `container_t`, the type rootless containers run as
+(`--exec-label`, [`selinux.go`](selinux.go)), with two MCS categories derived from the user's UID.
+It can then use only files labelled `container_file_t` with those categories, besides the host's
+`/usr` and `/etc`, which `container_t` may read. Before each start bob-manager gives that label to
+the workspace mounts (read-only ones too), the home folder, the run directory, and OpenCode and
+bob-manager when they belong to the user, as podman's `:Z` did; a file of another user in a
+mount stops the start. It labels its own listening sockets for the sandbox, since a
+`container_t` process may only connect to `container_t` sockets. The policy comes from the
+`container-selinux` package; bob-manager stops with an error when SELinux is on without it.
+
+It sees:
 
 - `/usr` and `/etc` read-only from the host, with a generated `/etc/hosts`;
 - `/bin`, `/sbin`, `/lib` and `/lib64` as on the host: the same symlinks into `/usr` (as on
@@ -196,7 +208,10 @@ usable. Avoid launching as host root.
 The agent runs as the user's own UID and groups, so a workspace mount is as readable and
 writable to it as to the user. It sees the host's `/usr` and every file in `/etc` the user can
 read. Its seccomp filter refuses new namespaces and the other calls listed under
-[Filesystem](#filesystem); there is no SELinux confinement yet, and no CPU, memory, or PID limits. The sandbox relies on the kernel's namespaces and does not protect against kernel or
+[Filesystem](#filesystem), and where SELinux is on it runs as `container_t`, kept off every file
+not labelled for it. There are no CPU, memory, or PID limits. Labelling a mount for the sandbox
+changes its files' SELinux type on the host, so other confined services may lose access to them;
+do not mount system directories or a whole home directory. The sandbox relies on the kernel's namespaces and does not protect against kernel or
 bubblewrap vulnerabilities; keep both patched. Allowed endpoints remain communication channels.
 
 ## Development
