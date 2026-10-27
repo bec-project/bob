@@ -18,6 +18,7 @@ type config struct {
 		OpenCode    string `toml:"opencode"`
 		Home        string `toml:"home"`
 		BindAddress string `toml:"bind_address"`
+		Runtime     string `toml:"runtime"`
 	} `toml:"sandbox"`
 	// Decode only to explain the removed section; bob no longer runs in a container.
 	UnsupportedContainer any `toml:"container"`
@@ -70,17 +71,18 @@ func loadConfig(path string) (containermanager.Options, error) {
 		return input, errors.New("workspace.mount_label was for containers; remove it")
 	}
 	input = containermanager.Options{
-		Workdir:      settings.Workspace.Workdir,
-		ReadWrite:    settings.Workspace.RW,
-		ReadOnly:     settings.Workspace.RO,
-		BaseURL:      settings.Provider.BaseURL,
-		Model:        settings.Provider.Model,
-		ContextLimit: settings.Provider.ContextLimit,
-		OutputLimit:  settings.Provider.OutputLimit,
-		BindAddress:  settings.Sandbox.BindAddress,
-		OpenCode:     settings.Sandbox.OpenCode,
-		Home:         settings.Sandbox.Home,
-		APIKey:       os.Getenv("API_KEY"),
+		Workdir:        settings.Workspace.Workdir,
+		ReadWrite:      settings.Workspace.RW,
+		ReadOnly:       settings.Workspace.RO,
+		BaseURL:        settings.Provider.BaseURL,
+		Model:          settings.Provider.Model,
+		ContextLimit:   settings.Provider.ContextLimit,
+		OutputLimit:    settings.Provider.OutputLimit,
+		BindAddress:    settings.Sandbox.BindAddress,
+		OpenCode:       settings.Sandbox.OpenCode,
+		Home:           settings.Sandbox.Home,
+		SandboxRuntime: settings.Sandbox.Runtime,
+		APIKey:         os.Getenv("API_KEY"),
 	}
 	if len(settings.MCP) > 0 {
 		input.MCPServers = make(map[string]containermanager.MCPServer, len(settings.MCP))

@@ -16,12 +16,11 @@ This file is an agent-oriented operating manual. Human-facing documentation live
   blocks another start.
 - Stop only the process groups bob started: the sandbox's and those of its host MCP servers.
   Never stop processes by name or perform broad cleanup.
-- The sandbox sees only what it is given. Never bind the host root, the user's home, `/usr`,
-  `/etc` or other host paths beyond: the loader and libraries OpenCode needs (read-only, from
-  `sharedLibraries`), `/etc/pki` and `/etc/ssl` (read-only), the run directory's sockets folder
-  (writable) and its generated passwd, group, hosts and OpenCode configuration (read-only),
-  `sandbox.home`, the two executables in `/bob/bin`, and the workspace mounts, if any. No shell or
-  other program may be visible inside.
+- The sandbox sees only what it is given. Keep srt's `denyRead: ["/"]` and re-allow nothing
+  beyond: OpenCode, bob-manager, `bash` and `socat`, the library folders, `/etc/pki`, `/etc/ssl`
+  and `/etc/hosts`, `sandbox.home`, the run directory's sockets folder and OpenCode's
+  configuration, and the workspace mounts, if any. It may write only `sandbox.home`, the sockets
+  folder and the writable workspace mounts.
 - OpenCode may use only MCP tools: keep `"*": "deny"` first in its permission rules, with
   `"<server>_*": "allow"` per MCP server.
 - Keep secrets out of bwrap arguments and diagnostics: the provider token and server password go
@@ -45,15 +44,14 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 
 - `launcher/container_manager/options.go` — defaults, validation, mount resolution, and the
   launch's name and password
-- `launcher/container_manager/sandbox.go` — bubblewrap arguments, the sandbox's environment,
-  endpoint mapping, startup, check and stop
+- `launcher/container_manager/srt.go` — sandbox-runtime's settings, the allowed domains, the
+  environment, and startup
+- `launcher/container_manager/sandbox.go` — the sandbox process: check and stop, OpenCode lookup,
+  and OpenCode's configuration
+- `launcher/container_manager/shim.go` — bob-manager as srt's `bwrap`, adding its seccomp filter
 - `launcher/container_manager/tunnel.go` — the Unix-socket tunnels and the helper that runs in the
   sandbox (`bob-manager --sandbox-helper`)
 - `launcher/container_manager/seccomp.go` — the sandbox's seccomp filter, per architecture
-- `launcher/container_manager/libraries.go` — the loader and libraries OpenCode needs, read from its
-  ELF headers
-- `launcher/container_manager/selinux.go`, `selinux_linux.go` — the sandbox's SELinux labels and
-  relabelling
 - `launcher/container_manager/manager.go` — the `Manager` API, connection JSON, and readiness
 - `launcher/container_manager/host_mcp.go` — host MCP servers: startup, readiness, and
   process-group cleanup
@@ -101,20 +99,19 @@ If you change:
 - `options.go` or `config.go`: test validation, defaults, token precedence, relative paths, and
   the errors for removed settings (`[container]`, `workspace.mount_label`, `mcp.<name>.port`);
   update `deploy/bob.example.toml` and the configuration section when public settings change.
-- `sandbox.go`: check the bubblewrap arguments (no host root or home, read-only system
-  directories, mount flags, no secrets), the environment, the endpoint mapping (loopback
-  addresses, `/etc/hosts` names, ports below 1024, rejected loopback endpoints and collisions),
-  and stop (process group, SIGTERM then SIGKILL, run directory removed). Preserve values without
-  shell interpolation.
+- `srt.go`: check the settings (deny-all reads with the listed exceptions, writes, allowed
+  domains with ports, `host.containers.internal` as `127.0.0.1`), the environment (srt's runner
+  and the shim's settings kept from OpenCode, `NO_PROXY` removed for it), and run a real start on
+  Linux: OpenCode must chat and reach its MCP server through srt's proxy. `sandbox.go`: stop
+  (process group, SIGTERM then SIGKILL, run directory removed).
+- `shim.go`: srt must still find the real bwrap through it, and bob's filter must be active in the
+  sandbox (`Seccomp_filters` of OpenCode's process).
 - `tunnel.go`: test both directions and half-closes; keep the helper's plan in step with
   `getSandboxEnvironment`, and keep the plan variable out of OpenCode's environment.
 - `seccomp.go`: keep both architectures' tables in step; the tests run the program through a small
   BPF interpreter, and on Linux check the numbers against Go's syscall table. Check a change on a
   real kernel: a refused call must fail with `EPERM` inside the sandbox, and OpenCode must still
   start and chat.
-- `selinux.go`: check on an enforcing host (AlmaLinux 9 with `container-selinux`): OpenCode must
-  run as `container_t`, reach its tunnels and the workspace, and chat; relabel only the user's own
-  files, and keep each file's SELinux user and role.
 - `opencode.json`: keep the `self-hosted` provider name and the variables it reads in step with
   `getOpenCodeEnvironment`.
 - `broker.go`: test leases (two clients, one start, none before the first client), teardown after
@@ -155,11 +152,11 @@ Readiness requests must go directly to the client listener, without environment 
 redirects. Startup errors include the sandbox's recent output, with the provider token redacted.
 
 The sandbox has no network. It reaches the configured endpoints by host and port through
-bob-manager's tunnels and does not enforce URL paths. The agent can call only MCP tools, runs as
-the user's UID, sees no host system files but OpenCode's libraries and the CA certificates, holds
-the provider token in its environment, runs under a
-seccomp filter that refuses new namespaces, mounting and other rarely used kernel calls, and,
-where SELinux is on, runs as `container_t` with the user's own categories. Preserve the documented policy and isolation limits
+sandbox-runtime's proxies and does not enforce URL paths. The agent can call only MCP tools, runs
+as the user's UID, sees few host files (OpenCode, bash, socat, the library folders, the CA
+certificates and the hosts file), holds the provider token in its environment, and runs under a
+seccomp filter that refuses new namespaces, mounting and other rarely used kernel calls. There is
+no SELinux confinement. Preserve the documented policy and isolation limits
 rather than promising stronger guarantees. Host-control sockets remain dangerous even through
 read-only mounts.
 

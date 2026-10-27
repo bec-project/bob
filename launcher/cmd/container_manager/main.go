@@ -72,9 +72,13 @@ func getOptions(args []string) (containermanager.Options, error) {
 }
 
 func run() error {
-	// In a bubblewrap sandbox, bob-manager opens the sandbox's tunnels and runs OpenCode.
+	// In the sandbox, bob-manager serves the app's way in and runs OpenCode.
 	if len(os.Args) == 2 && os.Args[1] == "--sandbox-helper" {
 		return containermanager.RunSandboxHelper()
+	}
+	// As sandbox-runtime's bwrap, bob-manager adds its seccomp filter and runs the real one.
+	if filepath.Base(os.Args[0]) == "bwrap" {
+		return containermanager.RunBwrapShim(os.Args[1:])
 	}
 	call, err := parseArgs(os.Args[1:])
 	if err == flag.ErrHelp {

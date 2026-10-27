@@ -1,7 +1,10 @@
 [sandbox]
-# bob runs OpenCode on this machine in a bubblewrap sandbox (Linux, needs the bwrap command):
-# its own namespaces, /usr and /etc read-only, the workspace mounts below and its own home, and
-# no network but the provider and MCP URLs in this file.
+# bob runs OpenCode on this machine under Anthropic's sandbox-runtime (Linux, needs bwrap and
+# socat): little of the host readable, the workspace mounts below and its own home, and no
+# network but the provider and MCP hosts in this file, through sandbox-runtime's proxies.
+# sandbox-runtime's dist/cli.js. Default: the copy installed with bob-manager
+# (../lib/sandbox-runtime beside it, as the RPM has it).
+# runtime = "/path/to/node_modules/@anthropic-ai/sandbox-runtime/dist/cli.js"
 # The OpenCode executable; a bare name is looked up on PATH. Default: the OpenCode installed with
 # bob-manager (../libexec/opencode beside it, as the RPM has it), else "opencode" on PATH.
 # opencode = "/opt/opencode/opencode"

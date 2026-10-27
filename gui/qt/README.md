@@ -147,7 +147,8 @@ on the GitHub release and in Gitea (package `bob`, and the RPM in the `bec` RPM 
   RPM carries Qt's official binaries in `/opt/bob-gui`, with `bob-gui` on the PATH, and
   bob-manager (also on the PATH) and the pinned OpenCode release (`/opt/bob-gui/libexec`, MIT
   license in `/opt/bob-gui/licenses/opencode`), so nothing else is installed by hand. It needs only
-  base RHEL 9 packages, `bubblewrap` and `container-selinux` among them for bob's sandbox.
+  base RHEL 9 packages, `bubblewrap` and `socat` among them for bob's sandbox, and carries
+  sandbox-runtime and ripgrep too.
 - `bob-gui_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with Qt inside the app. It is
   signed ad hoc, so macOS blocks its first start: allow it under System Settings → Privacy &
   Security, or run `xattr -dr com.apple.quarantine /Applications/bob-gui.app`.

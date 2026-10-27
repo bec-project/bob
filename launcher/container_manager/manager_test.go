@@ -13,31 +13,36 @@ import (
 	"time"
 )
 
-// sandboxEngine puts a stand-in bwrap first on PATH, and returns options that pass validation.
-// The stand-in records its arguments and environment in the returned folder (it gets no
-// variable of ours to find it), then exits with status 3, or hangs while a "hang" file exists.
+// sandboxEngine puts stand-ins for bwrap, socat and ripgrep first on PATH, makes a stand-in OpenCode
+// (which runs sandbox-runtime) and sandbox-runtime, and returns options that pass validation. The
+// stand-in OpenCode records its arguments and environment in the returned folder (it gets no
+// variable of ours to find it), then exits with status 3.
 func sandboxEngine(t *testing.T) (Options, string) {
 	t.Helper()
 	previous := sandboxSupported
 	sandboxSupported = true
 	t.Cleanup(func() { sandboxSupported = previous })
 	root := t.TempDir()
+	openCode := filepath.Join(root, "opencode")
 	script := `#!/bin/sh
 printf '%s\n' "$*" > "` + root + `/args"
 /usr/bin/env > "` + root + `/env"
-if [ -e "` + root + `/hang" ]; then exec /bin/sleep 30; fi
-echo 'fake bwrap: no sandbox here' >&2
+echo 'fake srt: no sandbox here' >&2
 exit 3
 `
-	if err := os.WriteFile(filepath.Join(root, "bwrap"), []byte(script), 0o700); err != nil {
+	if err := os.WriteFile(openCode, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	openCode := filepath.Join(root, "opencode")
-	if err := os.WriteFile(openCode, staticELF(), 0o700); err != nil {
+	for _, tool := range []string{"bwrap", "socat", "rg"} {
+		if err := os.WriteFile(filepath.Join(root, tool), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runtime := filepath.Join(root, "cli.js")
+	if err := os.WriteFile(runtime, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("BOB_TEST_STATE", root)
 	workdir := filepath.Join(root, "workspace")
 	if err := os.Mkdir(workdir, 0o700); err != nil {
 		t.Fatal(err)
@@ -45,13 +50,12 @@ exit 3
 	options := DefaultOptions()
 	options.Workdir = workdir
 	options.OpenCode = openCode
+	options.SandboxRuntime = runtime
 	options.Home = filepath.Join(root, "home")
 	options.BaseURL = "https://model.example/agent/"
 	return options, root
 }
 
-// staticELF is the smallest executable bob-manager reads: an x86_64 ELF header with no program,
-// so no loader and no libraries.
 func staticELF() []byte {
 	header := make([]byte, 64)
 	copy(header, "\x7fELF")
@@ -72,7 +76,7 @@ func TestStartReportsASandboxThatExitsAndCleansUp(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	_, err := manager.Start(ctx, options)
-	if err == nil || !strings.Contains(err.Error(), "OpenCode exited before becoming ready") || !strings.Contains(err.Error(), "fake bwrap") {
+	if err == nil || !strings.Contains(err.Error(), "OpenCode exited before becoming ready") || !strings.Contains(err.Error(), "fake srt") {
 		t.Fatalf("Start = %v", err)
 	}
 	if manager.sandbox != nil {

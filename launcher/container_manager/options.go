@@ -49,6 +49,9 @@ type Options struct {
 	OpenCode string
 	// Home is the folder that keeps OpenCode's home, configuration and sessions.
 	Home string
+	// SandboxRuntime is sandbox-runtime's cli.js. Empty selects the copy installed with
+	// bob-manager (lib/sandbox-runtime).
+	SandboxRuntime string
 }
 
 // defaultOutputLimit caps the output limit derived from ContextLimit; OpenCode's model
@@ -236,7 +239,7 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 		options.MCPServers[name] = server
 	}
 	// Without a workspace, OpenCode works in its own home.
-	options.workdir = sandboxHome
+	options.workdir = input.Home
 	if input.Workdir != "" {
 		options.workdir = options.mounts[0].path
 	}

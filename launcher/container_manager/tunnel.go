@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -71,49 +72,6 @@ func dialTCP(address string) func(context.Context) (net.Conn, error) {
 	}
 }
 
-// dialEndpoint dials an endpoint's target, refusing an address it must not reach. The check runs
-// on the address actually dialled, after the name was resolved, so a name that later resolves
-// elsewhere is caught too.
-func dialEndpoint(endpoint sandboxEndpoint) func(context.Context) (net.Conn, error) {
-	return func(ctx context.Context) (net.Conn, error) {
-		dialer := net.Dialer{Control: func(_, address string, _ syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			return checkEndpointAddress(net.ParseIP(host), endpoint.thisMachine)
-		}}
-		return dialer.DialContext(ctx, "tcp", endpoint.target)
-	}
-}
-
-// awsMetadataIPv6 is the cloud metadata service's IPv6 address; its IPv4 one is link-local.
-var awsMetadataIPv6 = net.ParseIP("fd00:ec2::254")
-
-// checkEndpointAddress refuses addresses an endpoint must not lead to: this machine's loopback
-// (except for host.containers.internal, which means this machine), link-local addresses, which
-// include the cloud metadata service at 169.254.169.254, and unspecified, multicast and broadcast
-// addresses.
-func checkEndpointAddress(ip net.IP, thisMachine bool) error {
-	if ip == nil {
-		return errors.New("not an IP address")
-	}
-	if mapped := ip.To4(); mapped != nil {
-		ip = mapped
-	}
-	switch {
-	case ip.IsLoopback() && thisMachine:
-		return nil
-	case ip.IsLoopback():
-		return fmt.Errorf("%s is this machine's loopback; reach the host as host.containers.internal", ip)
-	case ip.IsLinkLocalUnicast(), ip.Equal(awsMetadataIPv6):
-		return fmt.Errorf("%s is link-local, where cloud metadata services live", ip)
-	case ip.IsUnspecified(), ip.IsMulticast(), ip.IsLinkLocalMulticast(), ip.Equal(net.IPv4bcast), ip.To4() != nil && ip.To4()[0] == 0:
-		return fmt.Errorf("%s is not a host address", ip)
-	}
-	return nil
-}
-
 func dialUnix(path string) func(context.Context) (net.Conn, error) {
 	return func(ctx context.Context) (net.Conn, error) {
 		var dialer net.Dialer
@@ -132,13 +90,18 @@ const sandboxServerSocket = "server.sock"
 
 // sandboxPlan is what the helper in the sandbox sets up before it starts OpenCode.
 type sandboxPlan struct {
-	// Endpoints are the provider and MCP servers OpenCode may reach.
-	Endpoints []sandboxEndpoint `json:"endpoints"`
+	// Endpoints are the provider and MCP servers OpenCode reaches through tunnels; none under
+	// sandbox-runtime, whose proxies carry them.
+	Endpoints []sandboxEndpoint `json:"endpoints,omitempty"`
 	// Server is OpenCode's address in the sandbox, which clients reach through
 	// sandboxServerSocket.
 	Server string `json:"server"`
+	// Sockets is the folder of the tunnels' sockets as the sandbox sees it.
+	Sockets string `json:"sockets"`
 	// Command starts OpenCode.
 	Command []string `json:"command"`
+	// Unset are variables of the helper's environment that OpenCode does not get.
+	Unset []string `json:"unset,omitempty"`
 }
 
 // sandboxEndpoint is one endpoint OpenCode may reach. In the sandbox, the helper accepts
@@ -167,9 +130,9 @@ func RunSandboxHelper() error {
 		if err != nil {
 			return fmt.Errorf("listen for %s: %w", endpoint.Socket, err)
 		}
-		go serveTunnel(listener, dialUnix(filepath.Join(sandboxRunDir, endpoint.Socket)))
+		go serveTunnel(listener, dialUnix(filepath.Join(plan.Sockets, endpoint.Socket)))
 	}
-	server, err := net.Listen("unix", filepath.Join(sandboxRunDir, sandboxServerSocket))
+	server, err := net.Listen("unix", filepath.Join(plan.Sockets, sandboxServerSocket))
 	if err != nil {
 		return fmt.Errorf("listen for clients: %w", err)
 	}
@@ -177,8 +140,10 @@ func RunSandboxHelper() error {
 
 	cmd := exec.Command(plan.Command[0], plan.Command[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, os.Stdout, os.Stderr
+	unset := append([]string{sandboxPlanVariable}, plan.Unset...)
 	for _, entry := range os.Environ() {
-		if !strings.HasPrefix(entry, sandboxPlanVariable+"=") {
+		name, _, _ := strings.Cut(entry, "=")
+		if !slices.Contains(unset, name) {
 			cmd.Env = append(cmd.Env, entry)
 		}
 	}

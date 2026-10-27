@@ -24,7 +24,9 @@ the place of the home volume.
 
 - **Sandbox:** `sandbox.opencode` is the OpenCode executable; a bare name is looked up on the
   PATH. By default bob-manager runs the OpenCode installed with it (`../libexec/opencode` beside
-  its own executable, as the RPM installs it), else `opencode` on the PATH. `sandbox.home` is the folder that keeps OpenCode's home,
+  its own executable, as the RPM installs it), else `opencode` on the PATH. `sandbox.runtime` is
+  sandbox-runtime's `dist/cli.js`, by default the copy installed with bob-manager. `sandbox.home`
+  is the folder that keeps OpenCode's home,
   configuration and sessions; it defaults to `$XDG_DATA_HOME/bob/home` (or
   `~/.local/share/bob/home`), and a relative path resolves beside the config. Keep it on a local
   filesystem, not NFS: sessions live in SQLite. `sandbox.bind_address` is described under Access.
@@ -124,62 +126,53 @@ keeps the same sessions.
 ## Runtime requirements
 
 bob's sandbox runs on Linux only. bob-manager and its broker also run on macOS, but starting bob
-there fails; run bob in a Linux VM instead. The sandbox needs:
+there fails; run bob in a Linux VM instead. bob-manager runs OpenCode under Anthropic's
+[sandbox-runtime](https://github.com/anthropic-experimental/sandbox-runtime) (`srt`), which
+needs:
 
-- `bwrap` on bob-manager's PATH, from RHEL 9's BaseOS package `bubblewrap`;
-- unprivileged user namespaces, which RHEL 9 enables by default;
-- an OpenCode executable, a glibc build since it runs on the host's libraries. The desktop app's
-  RPM installs a pinned OpenCode beside bob-manager; elsewhere, install it and point
-  `sandbox.opencode` at it.
+- `bwrap` on bob-manager's PATH, from RHEL 9's BaseOS package `bubblewrap`, and unprivileged user
+  namespaces, which RHEL 9 enables by default;
+- `socat` (RHEL 9 AppStream) for srt's proxy bridges, and `bash`;
+- srt itself and `rg` (ripgrep), which srt scans the working directory with. The desktop app's
+  RPM installs both beside bob-manager (`lib/sandbox-runtime`, `libexec/rg`); elsewhere set
+  `sandbox.runtime` to srt's `dist/cli.js` and put `rg` on the PATH;
+- an OpenCode executable, a glibc build. srt runs on the Bun inside it (`BUN_BE_BUN=1`), so no
+  Node.js is needed. The RPM installs a pinned OpenCode beside bob-manager.
 
 No image, container engine, kernel module, `NET_ADMIN` capability or root access is needed.
 
 ## Filesystem
 
-The sandbox has its own user, mount, PID, IPC, UTS and network namespaces (`--unshare-all`) and
-its own session (`--new-session`), and ends with bob-manager (`--die-with-parent`). A seccomp
-filter (`--seccomp`, [`seccomp.go`](seccomp.go)) refuses, for everything in it, the system calls
-that reach the kernel's least-used and most attacked parts: new namespaces, mounting, the kernel
-keyring, BPF, perf, io_uring, userfaultfd, modules, kexec and the like (with `EPERM`; `clone3`
-with `ENOSYS`, so the C library falls back to `clone`, whose namespace flags the filter checks).
-Calls of another ABI, such as 32-bit x86 on x86_64, are refused. bob-manager builds the filter
-for x86_64 and arm64.
+bob-manager writes srt's settings for each start (`srt.go`) and runs
+`opencode <srt cli.js> --settings <file> -- bob-manager --sandbox-helper`. srt builds a
+bubblewrap sandbox without a network namespace of the host's (`--unshare-net`) that ends with
+srt (`--die-with-parent`, `--new-session`); with `denyRead: ["/"]` every top-level folder but
+`/proc`, `/dev` and `/sys` is an empty tmpfs, and these are re-allowed (`allowRead`):
 
-Where SELinux is on, the sandbox runs as `container_t`, the type rootless containers run as
-(`--exec-label`, [`selinux.go`](selinux.go)), with two MCS categories derived from the user's UID.
-It can then use only files labelled `container_file_t` with those categories, besides the host's
-`/usr` and `/etc`, which `container_t` may read. Before each start bob-manager gives that label to
-the workspace mounts (read-only ones too), the home folder, the run directory, and OpenCode and
-bob-manager when they belong to the user, as podman's `:Z` did; a file of another user in a
-mount stops the start. It labels its own listening sockets for the sandbox, since a
-`container_t` process may only connect to `container_t` sockets. The policy comes from the
-`container-selinux` package; bob-manager stops with an error when SELinux is on without it.
+- OpenCode, bob-manager, `bash` and `socat` (srt runs its bridges with them);
+- the library folders `/usr/lib64` and `/usr/lib`: srt binds the paths it is given after
+  resolving their symlinks, so single libraries would lose the names the loader asks for;
+- `/etc/pki`, `/etc/ssl` and the host's `/etc/hosts` (srt's bridges dial `localhost`);
+- `sandbox.home`, the run directory's sockets folder and OpenCode's configuration, at their own
+  paths, and the workspace mounts, if any.
 
-It sees:
+It may write (`allowWrite`) only `sandbox.home`, the sockets folder and the writable workspace
+mounts. OpenCode starts in `workspace.workdir`, or in its home without one, with `HOME` set to
+`sandbox.home` and `TMPDIR` inside it.
 
-- of the host's system, only what the dynamic loader needs to start OpenCode: the loader and the
-  libraries OpenCode names, transitively, read from its ELF headers and bound read-only at the
-  paths the loader looks in ([`libraries.go`](libraries.go)). There is no `/usr`, no shell and
-  no other program;
-- the host's certificate authorities (`/etc/pki`, `/etc/ssl`) read-only, and, generated by
-  bob-manager, `/etc/passwd` and `/etc/group` with one `opencode` account (the user's UID and
-  GID) and `/etc/hosts`; nothing else of `/etc`;
-- a private `/tmp`, `/proc` and `/dev`;
-- the sockets folder of the launch's run directory at `/run/bob`, the only host folder it may write
-  besides its home and the writable workspace mounts; the run directory is created under
-  `$XDG_RUNTIME_DIR` or else the temporary directory, and also holds the generated hosts file and
-  OpenCode's configuration, which the sandbox sees read-only as `/etc/hosts` and
-  `/bob/opencode.json`;
-- `sandbox.home` at `/home/opencode`, OpenCode's `HOME`;
-- bob-manager and OpenCode, read-only, in `/bob/bin`;
-- the workspace mounts, if bob.toml has any, at their own paths, writable or read-only. OpenCode
-  starts in `workspace.workdir`, or in its home without one.
+bob-manager's seccomp filter ([`seccomp.go`](seccomp.go)) refuses new namespaces, mounting, the
+kernel keyring, BPF, perf, io_uring, userfaultfd, modules, kexec and the like. srt has no
+setting for an extra filter, so bob-manager answers srt's `bwrapPath` itself: as `bwrap`
+([`shim.go`](shim.go)) it adds `--add-seccomp-fd` with its filter and becomes the real bwrap.
+srt's own Unix-socket filter is off (`allowAllUnixSockets`), because the helper serves the app's
+way in on a Unix socket inside.
 
-Nothing else of the host is visible, including the user's home. The sandbox's environment is
-built from scratch: `PATH=/bob/bin`, `HOME`, `USER`, `LANG`, `NODE_EXTRA_CA_CERTS` (the host's CA
-bundle), and what OpenCode's configuration reads (the provider URL, model and token, the server
-password, the MCP servers and model limit). Secrets go through the environment, never the bwrap
-command line.
+There is no SELinux confinement: srt's proxies make their Unix sockets on the host as the user's
+own type, and a `container_t` sandbox could not connect to them.
+
+The environment comes from bob-manager (`PATH`, `HOME`, `USER`, `LANG`, `TMPDIR`, the CA bundle,
+and what OpenCode's configuration reads), plus srt's proxy variables. The helper drops srt's
+runner variable, the shim's settings and `NO_PROXY` before it starts OpenCode.
 
 OpenCode may use the MCP servers' tools and none of its own: bob-manager gives it the permission
 rules `"*": "deny"` and `"<server>_*": "allow"` for each MCP server, so OpenCode does not even
@@ -187,27 +180,21 @@ offer the model its shell, file, search, web or task tools.
 
 ## Network policy
 
-The sandbox has no network. bob-manager carries the connections it needs through Unix sockets
-in the run directory's sockets folder, which both sides see:
+srt removes the network and runs an HTTP and a SOCKS5 proxy on the host. Inside, `socat` bridges
+them to `localhost:3128` and `localhost:1080`, and `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY`
+point there. The proxies let through only `network.allowedDomains`, which bob-manager fills with
+each endpoint's host and port from bob.toml (`ai.example:443`). Before dialling a name, srt
+resolves it and refuses loopback, link-local (including cloud metadata), unspecified, multicast
+and broadcast addresses and this host's own addresses.
 
-- **Endpoints:** one tunnel per provider or MCP endpoint (host and port), which bob-manager dials
-  on the host for every connection, resolving the name each time. In the sandbox, bob-manager
-  itself (`--sandbox-helper`) starts before OpenCode and listens for each endpoint on a loopback
-  address (`127.0.0.2`, `127.0.0.3`, …, one per host) that the generated `/etc/hosts` gives the
-  endpoint's name, so TLS still checks the real certificate.
-- **Clients:** a TCP listener on `sandbox.bind_address`, which bob-manager forwards to the
-  helper's `server.sock`; the helper connects it to OpenCode on `127.0.0.1:4096`.
+`host.containers.internal` and `host.docker.internal` mean this machine: OpenCode reaches such an
+MCP server as `127.0.0.1:<port>`, which srt allows as an explicit literal, and the proxy dials it
+on the host. srt's `NO_PROXY` would send `127.0.0.1` and private networks past the proxy into the
+sandbox's own loopback, so the helper removes it for OpenCode.
 
-The sandbox cannot bind ports below 1024, so those endpoints move up by 10000 inside: OpenCode
-reaches `https://ai.example/api` as `https://ai.example:10443/api`, and the server sees that port
-in the `Host` header. An endpoint given as an IP address is reached at its loopback address.
-Endpoint URLs cannot use `localhost` or a loopback address, since the sandbox has its own
-loopback. bob-manager also refuses an endpoint that leads to a loopback, link-local (which
-includes the cloud metadata service at `169.254.169.254`), unspecified, multicast or broadcast
-address: once when it starts, for every name it can resolve, and again on the address each
-connection actually dials, so a name that later resolves elsewhere is caught too. `host.containers.internal` and `host.docker.internal` mean this machine: bob-manager
-dials `127.0.0.1`, so a host MCP server can listen on `127.0.0.1` only. Two endpoints of one host
-whose ports meet in the sandbox (443 and 10443, say) are rejected.
+Clients reach OpenCode through a TCP listener on `sandbox.bind_address`, which bob-manager
+forwards to the helper's `server.sock` in the sockets folder; the helper connects it to OpenCode
+on `127.0.0.1:4096`.
 
 Endpoints are filtered by host and port, so other paths on an allowed host and port remain
 reachable. Upstream servers must enforce path restrictions and credential scope. Provider tokens
@@ -220,15 +207,14 @@ the agent can modify scripts or Git hooks that the host may later execute. Do no
 Docker/Podman or other host-control sockets, even read-only: Unix sockets in a mount stay
 usable. Avoid launching as host root.
 
-The agent can call the MCP servers' tools and nothing else; it has no shell, file or web tool,
-and the sandbox holds no program to run but OpenCode and bob-manager. The sandbox runs as the
-user's own UID, so a workspace mount, if any, is as readable and writable to it as to the user.
-Its seccomp filter refuses new namespaces and the other calls listed under
-[Filesystem](#filesystem), and where SELinux is on it runs as `container_t`, kept off every file
-not labelled for it. There are no CPU, memory, or PID limits. Labelling a mount for the sandbox
-changes its files' SELinux type on the host, so other confined services may lose access to them;
-do not mount system directories or a whole home directory. The sandbox relies on the kernel's namespaces and does not protect against kernel or
-bubblewrap vulnerabilities; keep both patched. Allowed endpoints remain communication channels.
+The agent can call the MCP servers' tools and nothing else; it has no shell, file or web tool.
+The sandbox itself holds `bash`, `socat` and the system libraries besides OpenCode and
+bob-manager, which srt needs. It runs as the user's own UID, so a workspace mount, if any, is as
+readable and writable to it as to the user. Its seccomp filter refuses new namespaces and the
+other calls listed under [Filesystem](#filesystem); there is no SELinux confinement, and no
+CPU, memory, or PID limits. The sandbox relies on the kernel's namespaces and does not protect
+against kernel or bubblewrap vulnerabilities; keep both patched. Allowed endpoints remain
+communication channels.
 
 ## Development
 

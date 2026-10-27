@@ -7,6 +7,7 @@
 %global app_dir /opt/bob-gui
 # ci/build_qt_rpm.sh pins OpenCode and defines this
 %{!?opencode_version:%global opencode_version 0}
+%{!?ripgrep_version:%global ripgrep_version 0}
 # Qt's binaries come stripped and without debug information; bob-manager is built without them
 %global debug_package %{nil}
 # OpenCode is a Bun executable whose program follows the ELF image: stripping would cut it off
@@ -20,13 +21,17 @@ Name:           bob-gui
 Version:        %{bob_version}
 Release:        1%{?dist}
 Summary:        Desktop app for bob, the OpenCode assistant in a sandbox
-# The repository has no license file yet; the bundled Qt is LGPL-3.0-only, OpenCode MIT
-License:        Proprietary AND LGPL-3.0-only AND MIT
+# The repository has no license file yet; the bundled Qt is LGPL-3.0-only, OpenCode MIT,
+# sandbox-runtime Apache-2.0 (its dependencies MIT, and BSD-3-Clause OR GPL-2.0 for node-forge),
+# ripgrep MIT OR Unlicense
+License:        Proprietary AND LGPL-3.0-only AND MIT AND Apache-2.0 AND (BSD-3-Clause OR GPL-2.0-only) AND (MIT OR Unlicense)
 URL:            https://github.com/bec-project/bob
 Source0:        %{name}-%{version}.tar.gz
 Source1:        bob-manager
 Source2:        opencode-%{opencode_version}-linux-x64.tar.gz
 Source3:        OPENCODE-LICENSE
+Source4:        sandbox-runtime.tar.gz
+Source5:        ripgrep-%{ripgrep_version}-x86_64.tar.gz
 
 BuildRequires:  cmake >= 3.22
 BuildRequires:  gcc-c++
@@ -39,14 +44,16 @@ BuildRequires:  mesa-libEGL-devel
 BuildRequires:  libxkbcommon-devel
 BuildRequires:  fontconfig
 BuildRequires:  dejavu-sans-fonts
-# bob-manager runs OpenCode in a bubblewrap sandbox, as container_t where SELinux is on
+# bob-manager runs OpenCode under sandbox-runtime, which builds a bubblewrap sandbox and bridges
+# its proxies in with socat
 Requires:       bubblewrap
-Requires:       container-selinux
+Requires:       socat
 
 %description
 A chat window for the OpenCode server that bob runs in a bubblewrap sandbox. The app
 starts the user's bob through bob-manager, or joins the one that runs, and holds it while open.
-It brings its own Qt 6.12, bob-manager and OpenCode %{opencode_version} in %{app_dir}.
+It brings its own Qt 6.12, bob-manager, OpenCode %{opencode_version}, sandbox-runtime and
+ripgrep %{ripgrep_version} in %{app_dir}.
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -78,6 +85,16 @@ mkdir -p %{buildroot}%{app_dir}/libexec
 tar -xzf %{SOURCE2} -C %{buildroot}%{app_dir}/libexec opencode
 chmod 0755 %{buildroot}%{app_dir}/libexec/opencode
 install -D -m 0644 %{SOURCE3} %{buildroot}%{app_dir}/licenses/opencode/LICENSE
+# sandbox-runtime and its dependencies (their licenses inside), without its Windows and other-arch
+# helpers; it runs on OpenCode's Bun
+mkdir -p %{buildroot}%{app_dir}/lib/sandbox-runtime
+tar -xzf %{SOURCE4} -C %{buildroot}%{app_dir}/lib/sandbox-runtime
+rm -rf %{buildroot}%{app_dir}/lib/sandbox-runtime/node_modules/@anthropic-ai/sandbox-runtime/vendor/srt-win \
+    %{buildroot}%{app_dir}/lib/sandbox-runtime/node_modules/@anthropic-ai/sandbox-runtime/vendor/seccomp/arm64
+# ripgrep, which sandbox-runtime scans the working directory with
+tar -xzf %{SOURCE5} -C %{_builddir} ripgrep-%{ripgrep_version}-x86_64-unknown-linux-musl
+install -m 0755 %{_builddir}/ripgrep-%{ripgrep_version}-x86_64-unknown-linux-musl/rg %{buildroot}%{app_dir}/libexec/rg
+install -D -m 0644 %{_builddir}/ripgrep-%{ripgrep_version}-x86_64-unknown-linux-musl/LICENSE-MIT %{buildroot}%{app_dir}/licenses/ripgrep/LICENSE-MIT
 for part in applications metainfo icons; do
     mv %{buildroot}%{app_dir}/share/$part %{buildroot}%{_datadir}/
 done

@@ -42,24 +42,30 @@ func TestCtrlCDuringStartupAndCleanup(t *testing.T) {
 		t.Skip("bob's sandbox runs on Linux only")
 	}
 	directory := t.TempDir()
-	// A stand-in bwrap that never becomes ready, notes the stop it is asked for, and takes a while
-	// to finish it. The sandbox gets no variable of ours, so the script names its folder itself.
+	// A stand-in OpenCode (which runs sandbox-runtime) that never becomes ready, notes the stop it
+	// is asked for, and takes a while to finish it. The sandbox gets no variable of ours, so the
+	// script names its folder itself.
 	script := `#!/bin/sh
 trap '/usr/bin/touch "` + directory + `/interrupted"; exit 130' INT
 trap '/usr/bin/touch "` + directory + `/down"; /usr/bin/sleep 0.5; /usr/bin/touch "` + directory + `/cleaned"; exit 0' TERM
 /usr/bin/touch "` + directory + `/up"
 while :; do /usr/bin/sleep 0.1; done
 `
-	if err := os.WriteFile(filepath.Join(directory, "bwrap"), []byte(script), 0700); err != nil {
+	openCode := filepath.Join(directory, "opencode")
+	if err := os.WriteFile(openCode, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	// bob-manager reads OpenCode's libraries, so it must be a real executable: this test's own.
-	openCode, err := os.Executable()
-	if err != nil {
+	for _, tool := range []string{"bwrap", "socat", "rg"} {
+		if err := os.WriteFile(filepath.Join(directory, tool), []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runtime := filepath.Join(directory, "cli.js")
+	if err := os.WriteFile(runtime, nil, 0600); err != nil {
 		t.Fatal(err)
 	}
 	config := filepath.Join(directory, "bob.toml")
-	content := "[sandbox]\nopencode = \"" + openCode + "\"\nhome = \"home\"\n[workspace]\nworkdir = \".\"\n[provider]\nbase_url = \"http://model.example/api/\"\n"
+	content := "[sandbox]\nopencode = \"" + openCode + "\"\nruntime = \"" + runtime + "\"\nhome = \"home\"\n[workspace]\nworkdir = \".\"\n[provider]\nbase_url = \"http://model.example/api/\"\n"
 	if err := os.WriteFile(config, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
