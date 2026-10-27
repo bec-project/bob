@@ -72,7 +72,7 @@ func TestSandboxSeesOnlyWhatItIsGiven(t *testing.T) {
 	args := getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode")
 	command := strings.Join(args, " ")
 	for _, value := range []string{
-		"--unshare-all", "--die-with-parent", "--new-session",
+		"--unshare-all", "--die-with-parent", "--new-session", "--seccomp 3",
 		"--ro-bind /usr /usr", "--ro-bind /etc /etc", "--ro-bind /run/user/1000/bob-1/hosts /etc/hosts",
 		"--bind /run/user/1000/bob-1/sockets /run/bob", "--ro-bind /run/user/1000/bob-1/opencode.json /bob/opencode.json", "--bind /data/bob/home /home/opencode",
 		"--ro-bind /usr/bin/bob-manager /bob/bin/bob-manager", "--ro-bind /opt/bob/opencode /bob/bin/opencode",

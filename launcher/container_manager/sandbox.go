@@ -136,8 +136,23 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err != nil {
 		return connection, err
 	}
+	// bubblewrap reads the seccomp filter from a file it inherits as descriptor 3.
+	filter, err := seccompFilter()
+	if err != nil {
+		return connection, err
+	}
+	filterPath := filepath.Join(runDir, "seccomp.bpf")
+	if err := os.WriteFile(filterPath, filter, 0o600); err != nil {
+		return connection, err
+	}
+	filterFile, err := os.Open(filterPath)
+	if err != nil {
+		return connection, err
+	}
+	defer filterFile.Close()
 	sandbox.cmd = exec.Command(options.binary, getSandboxArgs(options, runDir, helper, openCode)...)
 	sandbox.cmd.Env = env
+	sandbox.cmd.ExtraFiles = []*os.File{filterFile}
 	sandbox.cmd.Stdout = io.MultiWriter(os.Stderr, sandbox.output)
 	sandbox.cmd.Stderr = sandbox.cmd.Stdout
 	sandbox.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -350,6 +365,7 @@ func getSandboxEndpoints(urls []string) ([]sandboxEndpoint, map[string]string, [
 func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string) []string {
 	args := []string{
 		"--unshare-all", "--die-with-parent", "--new-session", "--hostname", "bob",
+		"--seccomp", "3",
 		"--ro-bind", "/usr", "/usr",
 	}
 	// RHEL's /bin, /sbin, /lib and /lib64 point into /usr.

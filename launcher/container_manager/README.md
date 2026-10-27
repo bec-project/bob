@@ -134,7 +134,13 @@ No image, container engine, kernel module, `NET_ADMIN` capability or root access
 ## Filesystem
 
 The sandbox has its own user, mount, PID, IPC, UTS and network namespaces (`--unshare-all`) and
-its own session (`--new-session`), and ends with bob-manager (`--die-with-parent`). It sees:
+its own session (`--new-session`), and ends with bob-manager (`--die-with-parent`). A seccomp
+filter (`--seccomp`, [`seccomp.go`](seccomp.go)) refuses, for everything in it, the system calls
+that reach the kernel's least-used and most attacked parts: new namespaces, mounting, the kernel
+keyring, BPF, perf, io_uring, userfaultfd, modules, kexec and the like (with `EPERM`; `clone3`
+with `ENOSYS`, so the C library falls back to `clone`, whose namespace flags the filter checks).
+Calls of another ABI, such as 32-bit x86 on x86_64, are refused. bob-manager builds the filter
+for x86_64 and arm64. It sees:
 
 - `/usr` and `/etc` read-only from the host, with a generated `/etc/hosts`;
 - `/bin`, `/sbin`, `/lib` and `/lib64` as on the host: the same symlinks into `/usr` (as on
@@ -189,8 +195,8 @@ usable. Avoid launching as host root.
 
 The agent runs as the user's own UID and groups, so a workspace mount is as readable and
 writable to it as to the user. It sees the host's `/usr` and every file in `/etc` the user can
-read. There is no seccomp filter and no SELinux confinement yet, and no CPU, memory, or PID
-limits. The sandbox relies on the kernel's namespaces and does not protect against kernel or
+read. Its seccomp filter refuses new namespaces and the other calls listed under
+[Filesystem](#filesystem); there is no SELinux confinement yet, and no CPU, memory, or PID limits. The sandbox relies on the kernel's namespaces and does not protect against kernel or
 bubblewrap vulnerabilities; keep both patched. Allowed endpoints remain communication channels.
 
 ## Development
