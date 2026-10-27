@@ -69,11 +69,13 @@ func sandboxTestOptions(t *testing.T) resolvedOptions {
 
 func TestSandboxSeesOnlyWhatItIsGiven(t *testing.T) {
 	options := sandboxTestOptions(t)
-	args := getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode", selinuxLabels{})
+	libraries := []sharedLibrary{{path: "/lib64/ld-linux-x86-64.so.2", file: "/usr/lib64/ld-linux-x86-64.so.2"}, {path: "/lib64/libc.so.6", file: "/usr/lib64/libc.so.6"}}
+	args := getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode", libraries, selinuxLabels{})
 	command := strings.Join(args, " ")
 	for _, value := range []string{
 		"--unshare-all", "--die-with-parent", "--new-session", "--seccomp 3",
-		"--ro-bind /usr /usr", "--ro-bind /etc /etc", "--ro-bind /run/user/1000/bob-1/hosts /etc/hosts",
+		"--ro-bind /usr/lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2", "--ro-bind /usr/lib64/libc.so.6 /lib64/libc.so.6",
+		"--ro-bind /run/user/1000/bob-1/passwd /etc/passwd", "--ro-bind /run/user/1000/bob-1/hosts /etc/hosts",
 		"--bind /run/user/1000/bob-1/sockets /run/bob", "--ro-bind /run/user/1000/bob-1/opencode.json /bob/opencode.json", "--bind /data/bob/home /home/opencode",
 		"--ro-bind /usr/bin/bob-manager /bob/bin/bob-manager", "--ro-bind /opt/bob/opencode /bob/bin/opencode",
 		"--bind /beamline/work /beamline/work", "--ro-bind /beamline/data /beamline/data",
@@ -83,10 +85,15 @@ func TestSandboxSeesOnlyWhatItIsGiven(t *testing.T) {
 			t.Fatalf("missing %q in %s", value, command)
 		}
 	}
-	// Neither the host's root nor the user's home comes in.
+	// Neither the host's root, its programs and configuration, nor the user's home comes in.
 	for i := 0; i+2 < len(args); i++ {
-		if strings.HasSuffix(args[i], "bind") && (args[i+1] == "/" || args[i+1] == os.Getenv("HOME")) {
-			t.Fatalf("binds %s", args[i+1])
+		if !strings.HasSuffix(args[i], "bind") {
+			continue
+		}
+		for _, forbidden := range []string{"/", "/usr", "/usr/bin", "/bin", "/etc", os.Getenv("HOME")} {
+			if args[i+1] == forbidden {
+				t.Fatalf("binds %s", args[i+1])
+			}
 		}
 	}
 	if strings.Contains(command, options.APIKey) || strings.Contains(command, options.password) {
@@ -97,11 +104,11 @@ func TestSandboxSeesOnlyWhatItIsGiven(t *testing.T) {
 func TestSandboxRunsWithItsSELinuxLabel(t *testing.T) {
 	options := sandboxTestOptions(t)
 	labels := newSELinuxLabels(1000)
-	command := strings.Join(getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode", labels), " ")
+	command := strings.Join(getSandboxArgs(options, "/run/user/1000/bob-1", "/usr/bin/bob-manager", "/opt/bob/opencode", nil, labels), " ")
 	if !strings.Contains(command, "--exec-label "+labels.process+" --file-label "+labels.file) {
 		t.Fatalf("no SELinux labels in %s", command)
 	}
-	if strings.Contains(strings.Join(getSandboxArgs(options, "/run/x", "/b", "/o", selinuxLabels{}), " "), "label") {
+	if strings.Contains(strings.Join(getSandboxArgs(options, "/run/x", "/b", "/o", nil, selinuxLabels{}), " "), "label") {
 		t.Fatal("labels without SELinux")
 	}
 }

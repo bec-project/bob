@@ -45,16 +45,17 @@ func TestCtrlCDuringStartupAndCleanup(t *testing.T) {
 	// A stand-in bwrap that never becomes ready, notes the stop it is asked for, and takes a while
 	// to finish it. The sandbox gets no variable of ours, so the script names its folder itself.
 	script := `#!/bin/sh
-trap 'touch "` + directory + `/interrupted"; exit 130' INT
-trap 'touch "` + directory + `/down"; sleep 0.5; touch "` + directory + `/cleaned"; exit 0' TERM
-touch "` + directory + `/up"
-while :; do sleep 0.1; done
+trap '/usr/bin/touch "` + directory + `/interrupted"; exit 130' INT
+trap '/usr/bin/touch "` + directory + `/down"; /usr/bin/sleep 0.5; /usr/bin/touch "` + directory + `/cleaned"; exit 0' TERM
+/usr/bin/touch "` + directory + `/up"
+while :; do /usr/bin/sleep 0.1; done
 `
 	if err := os.WriteFile(filepath.Join(directory, "bwrap"), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	openCode := filepath.Join(directory, "opencode")
-	if err := os.WriteFile(openCode, []byte("#!/bin/sh\n"), 0700); err != nil {
+	// bob-manager reads OpenCode's libraries, so it must be a real executable: this test's own.
+	openCode, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
 	config := filepath.Join(directory, "bob.toml")

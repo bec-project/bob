@@ -2,6 +2,7 @@ package containermanager
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"os"
@@ -23,8 +24,8 @@ func sandboxEngine(t *testing.T) (Options, string) {
 	root := t.TempDir()
 	script := `#!/bin/sh
 printf '%s\n' "$*" > "` + root + `/args"
-env > "` + root + `/env"
-if [ -e "` + root + `/hang" ]; then exec sleep 30; fi
+/usr/bin/env > "` + root + `/env"
+if [ -e "` + root + `/hang" ]; then exec /bin/sleep 30; fi
 echo 'fake bwrap: no sandbox here' >&2
 exit 3
 `
@@ -32,7 +33,7 @@ exit 3
 		t.Fatal(err)
 	}
 	openCode := filepath.Join(root, "opencode")
-	if err := os.WriteFile(openCode, []byte("#!/bin/sh\n"), 0o700); err != nil {
+	if err := os.WriteFile(openCode, staticELF(), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -47,6 +48,21 @@ exit 3
 	options.Home = filepath.Join(root, "home")
 	options.BaseURL = "https://model.example/agent/"
 	return options, root
+}
+
+// staticELF is the smallest executable bob-manager reads: an x86_64 ELF header with no program,
+// so no loader and no libraries.
+func staticELF() []byte {
+	header := make([]byte, 64)
+	copy(header, "\x7fELF")
+	header[4], header[5], header[6] = 2, 1, 1      // 64-bit, little-endian, version 1
+	binary.LittleEndian.PutUint16(header[16:], 2)  // an executable
+	binary.LittleEndian.PutUint16(header[18:], 62) // x86_64
+	binary.LittleEndian.PutUint32(header[20:], 1)
+	binary.LittleEndian.PutUint16(header[52:], 64) // header size
+	binary.LittleEndian.PutUint16(header[54:], 56) // program header size
+	binary.LittleEndian.PutUint16(header[58:], 64) // section header size
+	return header
 }
 
 func TestStartReportsASandboxThatExitsAndCleansUp(t *testing.T) {
@@ -119,21 +135,23 @@ func TestConnectionTellsWhereTheHostReachesEachMCPServer(t *testing.T) {
 
 func TestOpenCodeEnvironment(t *testing.T) {
 	const remote = `"mcp":{"bob":{"enabled":true,"oauth":false,"type":"remote","url":"http://mcp.example:8000/mcp"}}`
+	// Only MCP tools: everything else of OpenCode's is denied.
+	const deny, denyButBob = `"permission":{"*":"deny"}`, `"permission":{"*":"deny","bob_*":"allow"}`
 	const limit = `"provider":{"self-hosted":{"models":{"Qwen3.8-27B":{"limit":{"context":262144,"output":32768}}}}}`
 	for _, test := range []struct {
 		name            string
 		model           string
 		context, output int
 		mcp             bool
-		// want is the exact OPENCODE_CONFIG_CONTENT value; empty means the variable is absent.
+		// want is the exact OPENCODE_CONFIG_CONTENT value.
 		want string
 	}{
-		{"unset", "", 0, 0, false, ""},
-		{"unset with MCP", "", 0, 0, true, "{" + remote + "}"},
-		{"default output", "", 262144, 0, false, "{" + limit + "}"},
-		{"default output with MCP", "", 262144, 0, true, "{" + remote + "," + limit + "}"},
-		{"small context", "", 65536, 0, false, `{"provider":{"self-hosted":{"models":{"Qwen3.8-27B":{"limit":{"context":65536,"output":16384}}}}}}`},
-		{"explicit output and model", "vendor/model:7b", 131072, 8192, true, "{" + remote + `,"provider":{"self-hosted":{"models":{"vendor/model:7b":{"limit":{"context":131072,"output":8192}}}}}}`},
+		{"unset", "", 0, 0, false, "{" + deny + "}"},
+		{"unset with MCP", "", 0, 0, true, "{" + remote + "," + denyButBob + "}"},
+		{"default output", "", 262144, 0, false, "{" + deny + "," + limit + "}"},
+		{"default output with MCP", "", 262144, 0, true, "{" + remote + "," + denyButBob + "," + limit + "}"},
+		{"small context", "", 65536, 0, false, "{" + deny + `,"provider":{"self-hosted":{"models":{"Qwen3.8-27B":{"limit":{"context":65536,"output":16384}}}}}}`},
+		{"explicit output and model", "vendor/model:7b", 131072, 8192, true, "{" + remote + "," + denyButBob + `,"provider":{"self-hosted":{"models":{"vendor/model:7b":{"limit":{"context":131072,"output":8192}}}}}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			input := DefaultOptions()
@@ -153,9 +171,7 @@ func TestOpenCodeEnvironment(t *testing.T) {
 			want := []string{
 				"API_KEY=synthetic-token", "LLM_BASE_URL=https://provider.example/v1",
 				"LLM_MODEL_ID=" + input.Model, "OPENCODE_SERVER_PASSWORD=synthetic-password",
-			}
-			if test.want != "" {
-				want = append(want, "OPENCODE_CONFIG_CONTENT="+test.want)
+				"OPENCODE_CONFIG_CONTENT=" + test.want,
 			}
 			if !reflect.DeepEqual(environment, want) {
 				t.Fatalf("environment %v, want %v", environment, want)

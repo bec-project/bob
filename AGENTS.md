@@ -16,11 +16,14 @@ This file is an agent-oriented operating manual. Human-facing documentation live
   blocks another start.
 - Stop only the process groups bob started: the sandbox's and those of its host MCP servers.
   Never stop processes by name or perform broad cleanup.
-- The sandbox sees only what it is given. Never bind the host root, the user's home, or other
-  host paths beyond the read-only system directories (`/usr`, `/etc`, and `/bin`, `/sbin`, `/lib`,
-  `/lib64` as on the host), the run directory's sockets folder (writable) and its hosts file and
-  OpenCode configuration (read-only), `sandbox.home`, the two executables in `/bob/bin`, and the
-  workspace mounts.
+- The sandbox sees only what it is given. Never bind the host root, the user's home, `/usr`,
+  `/etc` or other host paths beyond: the loader and libraries OpenCode needs (read-only, from
+  `sharedLibraries`), `/etc/pki` and `/etc/ssl` (read-only), the run directory's sockets folder
+  (writable) and its generated passwd, group, hosts and OpenCode configuration (read-only),
+  `sandbox.home`, the two executables in `/bob/bin`, and the workspace mounts, if any. No shell or
+  other program may be visible inside.
+- OpenCode may use only MCP tools: keep `"*": "deny"` first in its permission rules, with
+  `"<server>_*": "allow"` per MCP server.
 - Keep secrets out of bwrap arguments and diagnostics: the provider token and server password go
   through the environment. Keep the sandbox's environment built from scratch; never pass
   bob-manager's own environment through.
@@ -47,6 +50,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `launcher/container_manager/tunnel.go` — the Unix-socket tunnels and the helper that runs in the
   sandbox (`bob-manager --sandbox-helper`)
 - `launcher/container_manager/seccomp.go` — the sandbox's seccomp filter, per architecture
+- `launcher/container_manager/libraries.go` — the loader and libraries OpenCode needs, read from its
+  ELF headers
 - `launcher/container_manager/selinux.go`, `selinux_linux.go` — the sandbox's SELinux labels and
   relabelling
 - `launcher/container_manager/manager.go` — the `Manager` API, connection JSON, and readiness
@@ -150,8 +155,9 @@ Readiness requests must go directly to the client listener, without environment 
 redirects. Startup errors include the sandbox's recent output, with the provider token redacted.
 
 The sandbox has no network. It reaches the configured endpoints by host and port through
-bob-manager's tunnels and does not enforce URL paths. The agent runs as the user's UID, sees the
-host's `/usr` and readable `/etc`, holds the provider token in its environment, runs under a
+bob-manager's tunnels and does not enforce URL paths. The agent can call only MCP tools, runs as
+the user's UID, sees no host system files but OpenCode's libraries and the CA certificates, holds
+the provider token in its environment, runs under a
 seccomp filter that refuses new namespaces, mounting and other rarely used kernel calls, and,
 where SELinux is on, runs as `container_t` with the user's own categories. Preserve the documented policy and isolation limits
 rather than promising stronger guarantees. Host-control sockets remain dangerous even through

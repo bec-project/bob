@@ -79,6 +79,10 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err != nil {
 		return connection, err
 	}
+	libraries, err := sharedLibraries(openCode)
+	if err != nil {
+		return connection, err
+	}
 	if err := os.MkdirAll(options.Home, 0o700); err != nil {
 		return connection, fmt.Errorf("create bob's home folder: %w", err)
 	}
@@ -141,6 +145,15 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err := os.WriteFile(filepath.Join(runDir, "opencode.json"), openCodeConfig, 0o644); err != nil {
 		return connection, err
 	}
+	// The sandbox's only account, which getpwuid and friends find.
+	account := fmt.Sprintf("opencode:x:%d:%d:bob:%s:/sbin/nologin\n", os.Getuid(), os.Getgid(), sandboxHome)
+	if err := os.WriteFile(filepath.Join(runDir, "passwd"), []byte(account), 0o644); err != nil {
+		return connection, err
+	}
+	group := fmt.Sprintf("opencode:x:%d:\n", os.Getgid())
+	if err := os.WriteFile(filepath.Join(runDir, "group"), []byte(group), 0o644); err != nil {
+		return connection, err
+	}
 	// The sockets made in the folder take its label.
 	if err := labels.relabelTree(runDir); err != nil {
 		return connection, err
@@ -176,7 +189,7 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 		return connection, err
 	}
 	defer filterFile.Close()
-	sandbox.cmd = exec.Command(options.binary, getSandboxArgs(options, runDir, helper, openCode, labels)...)
+	sandbox.cmd = exec.Command(options.binary, getSandboxArgs(options, runDir, helper, openCode, libraries, labels)...)
 	sandbox.cmd.Env = env
 	sandbox.cmd.ExtraFiles = []*os.File{filterFile}
 	sandbox.cmd.Stdout = io.MultiWriter(os.Stderr, sandbox.output)
@@ -205,7 +218,7 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 		URL:       "http://" + net.JoinHostPort(host, strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)),
 		Password:  options.password,
 		Container: options.name,
-		ReadOnly:  options.mounts[0].readOnly,
+		ReadOnly:  len(options.mounts) > 0 && options.mounts[0].readOnly,
 		Runtime:   runtimeName,
 		Workspace: options.workdir,
 	}
@@ -405,7 +418,7 @@ func getSandboxEndpoints(urls []string) ([]sandboxEndpoint, map[string]string, [
 
 // getSandboxArgs is the bubblewrap command line. It carries no secrets: they go through the
 // environment.
-func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string, labels selinuxLabels) []string {
+func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string, libraries []sharedLibrary, labels selinuxLabels) []string {
 	args := []string{
 		"--unshare-all", "--die-with-parent", "--new-session", "--hostname", "bob",
 		"--seccomp", "3",
@@ -414,22 +427,19 @@ func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string, la
 		// What the sandbox runs, and the files it makes in its own /tmp and /dev.
 		args = append(args, "--exec-label", labels.process, "--file-label", labels.file)
 	}
-	args = append(args, "--ro-bind", "/usr", "/usr")
-	// RHEL's /bin, /sbin, /lib and /lib64 point into /usr.
-	for _, directory := range []string{"/bin", "/sbin", "/lib", "/lib64"} {
-		info, err := os.Lstat(directory)
-		switch {
-		case err != nil:
-		case info.Mode()&os.ModeSymlink != 0:
-			if target, err := os.Readlink(directory); err == nil {
-				args = append(args, "--symlink", target, directory)
-			}
-		case info.IsDir():
+	// Of the host's system, only what the loader needs to start OpenCode: no shell, no programs.
+	for _, library := range libraries {
+		args = append(args, "--ro-bind", library.file, library.path)
+	}
+	// The certificate authorities, so OpenCode trusts what the host trusts.
+	for _, directory := range []string{"/etc/pki", "/etc/ssl"} {
+		if _, err := os.Stat(directory); err == nil {
 			args = append(args, "--ro-bind", directory, directory)
 		}
 	}
 	args = append(args,
-		"--ro-bind", "/etc", "/etc",
+		"--ro-bind", filepath.Join(runDir, "passwd"), "/etc/passwd",
+		"--ro-bind", filepath.Join(runDir, "group"), "/etc/group",
 		"--ro-bind", filepath.Join(runDir, "hosts"), "/etc/hosts",
 		"--proc", "/proc",
 		"--dev", "/dev",
@@ -484,11 +494,18 @@ func getSandboxEnvironment(options resolvedOptions, inside map[string]string, en
 		lang = "C.UTF-8"
 	}
 	env := []string{
-		"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + sandboxHome, "USER=" + name, "LANG=" + lang,
+		"PATH=" + sandboxBin, "HOME=" + sandboxHome, "USER=" + name, "LANG=" + lang,
 		"OPENCODE_CONFIG=" + sandboxConfig, sandboxPlanVariable + "=" + string(plan),
+	}
+	// Bun trusts its own copy of the public authorities; these add the host's own.
+	if _, err := os.Stat(systemCertificates); err == nil {
+		env = append(env, "NODE_EXTRA_CA_CERTS="+systemCertificates)
 	}
 	return append(env, launch...), nil
 }
+
+// systemCertificates is RHEL's bundle of the authorities the host trusts.
+const systemCertificates = "/etc/pki/tls/certs/ca-bundle.crt"
 
 // getOpenCodeEnvironment is what OpenCode's configuration reads: the provider, the model, the
 // server's password, and the MCP servers and model limit merged into opencode.json.
@@ -497,11 +514,16 @@ func getOpenCodeEnvironment(options resolvedOptions) ([]string, error) {
 		"API_KEY=" + options.APIKey, "LLM_BASE_URL=" + options.BaseURL,
 		"LLM_MODEL_ID=" + options.Model, "OPENCODE_SERVER_PASSWORD=" + options.password,
 	}
-	config := map[string]any{}
+	// OpenCode may use the MCP servers' tools and nothing else of its own: no shell, no files, no
+	// web. Rules are read in order and the last match wins; JSON objects keep sorted keys, so "*"
+	// comes first.
+	permission := map[string]any{"*": "deny"}
+	config := map[string]any{"permission": permission}
 	mcp := map[string]any{}
 	for _, name := range mcpServerNames(options.MCPServers) {
 		server := options.MCPServers[name]
 		mcp[name] = map[string]any{"type": "remote", "url": server.URL, "oauth": false, "enabled": true}
+		permission[name+"_*"] = "allow"
 	}
 	if len(mcp) > 0 {
 		config["mcp"] = mcp
@@ -512,14 +534,11 @@ func getOpenCodeEnvironment(options resolvedOptions) ([]string, error) {
 			options.Model: map[string]any{"limit": map[string]any{"context": contextLimit, "output": outputLimit}},
 		}}}
 	}
-	if len(config) > 0 {
-		encoded, err := json.Marshal(config)
-		if err != nil {
-			return nil, err
-		}
-		environment = append(environment, "OPENCODE_CONFIG_CONTENT="+string(encoded))
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
 	}
-	return environment, nil
+	return append(environment, "OPENCODE_CONFIG_CONTENT="+string(encoded)), nil
 }
 
 // tailWriter keeps the last tailSize bytes written to it.

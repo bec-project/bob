@@ -235,7 +235,11 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 		server.HostCommand[0] = executable
 		options.MCPServers[name] = server
 	}
-	options.workdir = options.mounts[0].path
+	// Without a workspace, OpenCode works in its own home.
+	options.workdir = sandboxHome
+	if input.Workdir != "" {
+		options.workdir = options.mounts[0].path
+	}
 	var token [24]byte
 	if _, err := rand.Read(token[:]); err != nil {
 		return resolvedOptions{}, err
@@ -351,7 +355,7 @@ func getMounts(input Options) ([]mount, error) {
 		paths    []string
 		readOnly bool
 	}{
-		{paths: []string{input.Workdir}},
+		{paths: workdirPaths(input.Workdir)},
 		{paths: input.ReadWrite},
 		{paths: input.ReadOnly, readOnly: true},
 	}
@@ -390,6 +394,14 @@ func getMounts(input Options) ([]mount, error) {
 func pathsOverlap(a, b string) bool {
 	separator := string(filepath.Separator)
 	return a == b || strings.HasPrefix(a, strings.TrimSuffix(b, separator)+separator) || strings.HasPrefix(b, strings.TrimSuffix(a, separator)+separator)
+}
+
+// workdirPaths is the workspace as a mount: none when bob.toml names no workspace.
+func workdirPaths(workdir string) []string {
+	if workdir == "" {
+		return nil
+	}
+	return []string{workdir}
 }
 
 func mcpServerNames(servers map[string]MCPServer) []string {

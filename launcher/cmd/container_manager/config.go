@@ -107,12 +107,9 @@ func loadConfig(path string) (containermanager.Options, error) {
 	if endpoint, err := url.Parse(input.BaseURL); err == nil && endpoint.Hostname() == "provider.example" {
 		return input, errors.New("provider.base_url is a placeholder; replace it with your actual provider or gateway API URL")
 	}
-	if input.Workdir == "" {
-		return input, errors.New("config requires workspace.workdir")
-	}
 
 	// Resolve paths beside the config so it works from any launching directory.
-	if !filepath.IsAbs(input.Workdir) {
+	if input.Workdir != "" && !filepath.IsAbs(input.Workdir) {
 		input.Workdir = filepath.Join(filepath.Dir(path), input.Workdir)
 	}
 	if input.Home != "" && !filepath.IsAbs(input.Home) {

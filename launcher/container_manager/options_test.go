@@ -81,11 +81,13 @@ func TestMountsPreserveSymlinkAndRelativePaths(t *testing.T) {
 	}
 }
 
-func TestMountsRequireWorkdir(t *testing.T) {
-	for _, input := range []Options{{}, {ReadWrite: []string{t.TempDir()}}, {ReadOnly: []string{t.TempDir()}}, {Workdir: t.TempDir(), ReadOnly: []string{""}}} {
-		if _, err := getMounts(input); err == nil {
-			t.Fatal("accepted an empty mount path or missing workdir")
-		}
+func TestMountsWithoutAWorkspace(t *testing.T) {
+	if _, err := getMounts(Options{Workdir: t.TempDir(), ReadOnly: []string{""}}); err == nil {
+		t.Fatal("accepted an empty mount path")
+	}
+	// Without a workspace, nothing of the host is mounted.
+	if mounts, err := getMounts(Options{}); err != nil || len(mounts) != 0 {
+		t.Fatalf("mounts without a workspace: %v, %v", mounts, err)
 	}
 }
 

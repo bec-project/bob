@@ -39,7 +39,7 @@ func parseArgs(args []string) (invocation, error) {
 		fmt.Fprintln(flags.Output(), "the linger time after the last one leaves.")
 		fmt.Fprintln(flags.Output())
 		flags.PrintDefaults()
-		fmt.Fprintln(flags.Output(), "\nCreate bob.toml from the repository's deploy/bob.example.toml and edit its workspace,")
+		fmt.Fprintln(flags.Output(), "\nCreate bob.toml from the repository's deploy/bob.example.toml and edit its provider,")
 		fmt.Fprintln(flags.Output(), "or select an existing file with --config PATH.")
 	}
 	if err := flags.Parse(args); err != nil {
