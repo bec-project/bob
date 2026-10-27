@@ -81,7 +81,7 @@ func dialUnix(path string) func(context.Context) (net.Conn, error) {
 // sandboxPlanVariable carries the sandboxPlan from bob-manager to its helper in the sandbox.
 const sandboxPlanVariable = "BOB_SANDBOX_PLAN"
 
-// sandboxRunDir is where the sandbox sees bob-manager's run directory for this launch.
+// sandboxRunDir is where the sandbox sees the sockets folder of bob-manager's run directory.
 const sandboxRunDir = "/run/bob"
 
 // sandboxServerSocket is the socket file the helper connects to OpenCode's port.

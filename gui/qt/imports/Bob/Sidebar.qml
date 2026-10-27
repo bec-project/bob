@@ -104,7 +104,7 @@ Rectangle {
                 anchors.topMargin: 24
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
-                text: Chat.sessions.query ? qsTr("No chat matches.") : qsTr("No chats in this container yet.")
+                text: Chat.sessions.query ? qsTr("No chat matches.") : qsTr("No chats in bob yet.")
                 color: Theme.text3
                 font.pixelSize: 13
             }
@@ -169,7 +169,7 @@ Rectangle {
         property string sessionId
         property string sessionTitle
         title: qsTr("Delete this chat?")
-        text: qsTr("Delete “%1”? This removes it from the container's history.").arg(sessionTitle)
+        text: qsTr("Delete “%1”? This removes it from bob's history.").arg(sessionTitle)
         confirmText: qsTr("Delete")
         onAccepted: Chat.deleteSession(sessionId)
     }

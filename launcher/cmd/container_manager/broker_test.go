@@ -388,7 +388,7 @@ func TestBrokerOutlastsBriefEngineFailures(t *testing.T) {
 	defer conn.Close()
 	// failures add up to more than the limit, but never that many in a row: bob stays
 	for round := 0; round < 3; round++ {
-		manager.setCheck(errors.New("Cannot connect to the Docker daemon"))
+		manager.setCheck(errors.New("the sandbox could not be checked"))
 		checked := manager.checkCount()
 		waitFor(t, "failing checks", func() bool { return manager.checkCount() >= checked+2 })
 		manager.setCheck(nil)
@@ -401,7 +401,7 @@ func TestBrokerOutlastsBriefEngineFailures(t *testing.T) {
 	default:
 	}
 	// an engine that stays away counts as bob gone
-	manager.setCheck(errors.New("Cannot connect to the Docker daemon"))
+	manager.setCheck(errors.New("the sandbox could not be checked"))
 	select {
 	case <-run.done:
 	case <-time.After(5 * time.Second):
@@ -413,10 +413,10 @@ func TestBrokerOutlastsBriefEngineFailures(t *testing.T) {
 }
 
 func TestStartFailureReachesEveryClient(t *testing.T) {
-	manager := &fakeLifecycle{failure: errors.New("start the docker engine first")}
+	manager := &fakeLifecycle{failure: errors.New("find bwrap on PATH; install bubblewrap")}
 	run := startBroker(t, manager, time.Second)
 	_, _, err := consume(t, run.socket, "gui")
-	if err == nil || !strings.Contains(err.Error(), "docker engine") {
+	if err == nil || !strings.Contains(err.Error(), "install bubblewrap") {
 		t.Fatalf("consumer did not get the start error: %v", err)
 	}
 	select {

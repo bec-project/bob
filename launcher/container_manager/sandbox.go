@@ -21,12 +21,19 @@ import (
 	"time"
 )
 
-// The bubblewrap runtime runs OpenCode on the host, in a sandbox of its own user, mount, PID,
-// IPC, UTS and network namespaces. It sees /usr and /etc read-only, the workspace mounts and
-// its own home, nothing else of the host, and has no network: tunnel.go carries the few
-// connections it needs. It needs no image, no engine and no kernel modules.
+// bob runs OpenCode on the host, in a bubblewrap sandbox of its own user, mount, PID, IPC, UTS
+// and network namespaces. It sees /usr and /etc read-only, the workspace mounts and its own home,
+// nothing else of the host, and has no network: tunnel.go carries the few connections it needs.
+// It needs no image, no engine and no kernel modules.
 
-const bubblewrapRuntime = "bubblewrap"
+// runtimeName is what Connection.Runtime reports.
+const runtimeName = "bubblewrap"
+
+// sandboxSupported is false where bubblewrap does not exist; tests switch it on.
+var sandboxSupported = runtime.GOOS == "linux"
+
+// openCodeProvider is the provider name defined in opencode.json.
+const openCodeProvider = "self-hosted"
 
 const (
 	// sandboxHome is OpenCode's home in the sandbox.
@@ -36,9 +43,12 @@ const (
 	sandboxBin = "/bob/bin"
 	// sandboxServer is OpenCode's address in the sandbox.
 	sandboxServer = "127.0.0.1:4096"
+	// sandboxConfig is OpenCode's base configuration in the sandbox.
+	sandboxConfig = "/bob/opencode.json"
 )
 
-// openCodeConfig is containers/opencode.json, the configuration the image carries.
+// openCodeConfig is OpenCode's base configuration: the self-hosted provider, read from the
+// environment.
 //
 //go:embed opencode.json
 var openCodeConfig []byte
@@ -53,19 +63,14 @@ type sandboxProcess struct {
 	listeners []net.Listener
 }
 
-// startBubblewrap starts OpenCode in a sandbox and waits until it answers.
-func (m *Manager) startBubblewrap(parent context.Context, options resolvedOptions) (connection Connection, startErr error) {
-	if runtime.GOOS != "linux" {
-		return connection, errors.New("the bubblewrap runtime runs on Linux only; use Docker or Podman here")
-	}
-	for _, name := range mcpServerNames(options.MCPServers) {
-		if options.MCPServers[name].Port != 0 {
-			return connection, fmt.Errorf("mcp.%s.port publishes a container port, which the bubblewrap runtime has none of", name)
-		}
+// startSandbox starts OpenCode in a sandbox and waits until it answers.
+func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) (connection Connection, startErr error) {
+	if !sandboxSupported {
+		return connection, errors.New("bob's sandbox runs on Linux only; on macOS, run bob in a Linux VM")
 	}
 	openCode, err := exec.LookPath(options.OpenCode)
 	if err != nil {
-		return connection, fmt.Errorf("find OpenCode (container.opencode): %w", err)
+		return connection, fmt.Errorf("find OpenCode (sandbox.opencode): %w", err)
 	}
 	if openCode, err = filepath.Abs(openCode); err != nil {
 		return connection, err
@@ -105,6 +110,11 @@ func (m *Manager) startBubblewrap(parent context.Context, options resolvedOption
 		return connection, err
 	}
 	sandbox := &sandboxProcess{runDir: runDir, done: make(chan struct{}), output: &tailWriter{}}
+	// The sandbox may write only the sockets folder; its hosts file and configuration stay ours.
+	sockets := filepath.Join(runDir, "sockets")
+	if err := os.Mkdir(sockets, 0o700); err != nil {
+		return connection, err
+	}
 	m.sandbox = sandbox
 	hostsFile := "127.0.0.1 localhost\n::1 localhost\n" + strings.Join(hosts, "\n") + "\n"
 	if err := os.WriteFile(filepath.Join(runDir, "hosts"), []byte(hostsFile), 0o644); err != nil {
@@ -114,7 +124,7 @@ func (m *Manager) startBubblewrap(parent context.Context, options resolvedOption
 		return connection, err
 	}
 	for _, endpoint := range endpoints {
-		listener, err := net.Listen("unix", filepath.Join(runDir, endpoint.Socket))
+		listener, err := net.Listen("unix", filepath.Join(sockets, endpoint.Socket))
 		if err != nil {
 			return connection, err
 		}
@@ -145,7 +155,7 @@ func (m *Manager) startBubblewrap(parent context.Context, options resolvedOption
 		return connection, err
 	}
 	sandbox.listeners = append(sandbox.listeners, listener)
-	go serveTunnel(listener, dialUnix(filepath.Join(runDir, sandboxServerSocket)))
+	go serveTunnel(listener, dialUnix(filepath.Join(sockets, sandboxServerSocket)))
 	host := options.BindAddress
 	if ip := net.ParseIP(host); ip == nil || ip.IsUnspecified() {
 		host = "127.0.0.1"
@@ -153,9 +163,9 @@ func (m *Manager) startBubblewrap(parent context.Context, options resolvedOption
 	connection = Connection{
 		URL:       "http://" + net.JoinHostPort(host, strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)),
 		Password:  options.password,
-		Container: options.Name,
+		Container: options.name,
 		ReadOnly:  options.mounts[0].readOnly,
-		Runtime:   options.Runtime,
+		Runtime:   runtimeName,
 		Workspace: options.workdir,
 	}
 	for _, name := range mcpServerNames(options.MCPServers) {
@@ -166,7 +176,7 @@ func (m *Manager) startBubblewrap(parent context.Context, options resolvedOption
 		if connection.MCPServers == nil {
 			connection.MCPServers = map[string]MCPEndpoint{}
 		}
-		connection.MCPServers[name] = MCPEndpoint{URL: hostMCPURL(server, ""), Plugin: server.Plugin}
+		connection.MCPServers[name] = MCPEndpoint{URL: hostMCPURL(server), Plugin: server.Plugin}
 	}
 
 	// A sandbox that exits early ends the wait for it.
@@ -215,7 +225,16 @@ func (s *sandboxProcess) stop(ctx context.Context) error {
 	for _, listener := range s.listeners {
 		listener.Close()
 	}
-	if s.cmd != nil && s.cmd.Process != nil {
+	running := s.cmd != nil && s.cmd.Process != nil
+	if running {
+		select {
+		case <-s.done:
+			// Reaped: its process group ID may already belong to someone else.
+			running = false
+		default:
+		}
+	}
+	if running {
 		// bubblewrap's --die-with-parent takes everything in the sandbox down with it.
 		syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
 		select {
@@ -352,7 +371,8 @@ func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string) []
 		"--proc", "/proc",
 		"--dev", "/dev",
 		"--tmpfs", "/tmp",
-		"--bind", runDir, sandboxRunDir,
+		"--bind", filepath.Join(runDir, "sockets"), sandboxRunDir,
+		"--ro-bind", filepath.Join(runDir, "opencode.json"), sandboxConfig,
 		"--bind", options.Home, sandboxHome,
 		"--ro-bind", helper, sandboxBin+"/bob-manager",
 		"--ro-bind", openCode, sandboxBin+"/opencode",
@@ -368,8 +388,8 @@ func getSandboxArgs(options resolvedOptions, runDir, helper, openCode string) []
 }
 
 // getSandboxEnvironment is the sandbox's whole environment: nothing of bob-manager's own, the
-// variables OpenCode's configuration reads with the URLs it reaches in the sandbox, and the plan
-// for the helper.
+// variables OpenCode's configuration reads, with the URLs it reaches in the sandbox, and the
+// plan for the helper.
 func getSandboxEnvironment(options resolvedOptions, inside map[string]string, endpoints []sandboxEndpoint) ([]string, error) {
 	sandboxed := options
 	sandboxed.BaseURL = inside[options.BaseURL]
@@ -380,7 +400,7 @@ func getSandboxEnvironment(options resolvedOptions, inside map[string]string, en
 		}
 		sandboxed.MCPServers[name] = server
 	}
-	launch, err := getLaunchEnvironment(sandboxed)
+	launch, err := getOpenCodeEnvironment(sandboxed)
 	if err != nil {
 		return nil, err
 	}
@@ -402,15 +422,41 @@ func getSandboxEnvironment(options resolvedOptions, inside map[string]string, en
 	}
 	env := []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + sandboxHome, "USER=" + name, "LANG=" + lang,
-		"OPENCODE_CONFIG=" + sandboxRunDir + "/opencode.json", sandboxPlanVariable + "=" + string(plan),
+		"OPENCODE_CONFIG=" + sandboxConfig, sandboxPlanVariable + "=" + string(plan),
 	}
-	for _, entry := range launch {
-		// The container's firewall and identity settings mean nothing here.
-		if !strings.HasPrefix(entry, "BOB_") {
-			env = append(env, entry)
+	return append(env, launch...), nil
+}
+
+// getOpenCodeEnvironment is what OpenCode's configuration reads: the provider, the model, the
+// server's password, and the MCP servers and model limit merged into opencode.json.
+func getOpenCodeEnvironment(options resolvedOptions) ([]string, error) {
+	environment := []string{
+		"API_KEY=" + options.APIKey, "LLM_BASE_URL=" + options.BaseURL,
+		"LLM_MODEL_ID=" + options.Model, "OPENCODE_SERVER_PASSWORD=" + options.password,
+	}
+	config := map[string]any{}
+	mcp := map[string]any{}
+	for _, name := range mcpServerNames(options.MCPServers) {
+		server := options.MCPServers[name]
+		mcp[name] = map[string]any{"type": "remote", "url": server.URL, "oauth": false, "enabled": true}
+	}
+	if len(mcp) > 0 {
+		config["mcp"] = mcp
+	}
+	if contextLimit, outputLimit := options.modelLimit(); contextLimit > 0 {
+		// OpenCode deep-merges this into opencode.json, whose model key is the model ID.
+		config["provider"] = map[string]any{openCodeProvider: map[string]any{"models": map[string]any{
+			options.Model: map[string]any{"limit": map[string]any{"context": contextLimit, "output": outputLimit}},
+		}}}
+	}
+	if len(config) > 0 {
+		encoded, err := json.Marshal(config)
+		if err != nil {
+			return nil, err
 		}
+		environment = append(environment, "OPENCODE_CONFIG_CONTENT="+string(encoded))
 	}
-	return env, nil
+	return environment, nil
 }
 
 // tailWriter keeps the last tailSize bytes written to it.

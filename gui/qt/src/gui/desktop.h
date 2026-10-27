@@ -33,8 +33,6 @@ public:
     Q_INVOKABLE QString formatDuration(double ms) const;
     Q_INVOKABLE QString formatCost(double cost) const;
     Q_INVOKABLE QString relativeTime(double ms) const;
-    // Milliseconds of an ISO 8601 time (as the engines report it), or 0.
-    Q_INVOKABLE double parseTime(const QString &iso) const;
     Q_INVOKABLE int clampWidth(double width, int min, int windowWidth) const;
     Q_INVOKABLE QString patchHtml(const QString &patch, const QString &addColor, const QString &deleteColor,
                                   const QString &hunkColor) const;

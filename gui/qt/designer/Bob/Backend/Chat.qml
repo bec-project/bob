@@ -8,7 +8,7 @@ QtObject {
 
     property string phase: "ready"
     property string connectError: ""
-    property var connection: ({ url: "http://127.0.0.1:52997", container: "bob-501-6c788c03", runtime: "docker",
+    property var connection: ({ url: "http://127.0.0.1:52997", container: "bob-501-6c788c03", runtime: "bubblewrap",
                                 workspace: "/home/me/project" })
     property string serverVersion: "1.18.35"
     property string stream: "open"

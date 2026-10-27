@@ -1,9 +1,9 @@
 # bob desktop app (Qt)
 
-A native Qt 6 / QML app for the OpenCode server that bob runs in its container, and the way bob
+A native Qt 6 / QML app for the OpenCode server that bob runs in its sandbox, and the way bob
 starts: the first app a user opens starts their bob, and later ones join it.
 
-- **Chats** from the container, grouped by day, with search, rename and delete.
+- **Chats** from bob, grouped by day, with search, rename and delete.
 - **Streaming answers** with the model's thinking in a collapsible block and a live timer.
 - **Tool calls** as rows with status, duration, input and output. A sub-agent's work (the `task`
   tool) shows inside its row as it happens.
@@ -28,7 +28,7 @@ The C++ side holds the lease on bob: it runs `bob-manager --config bob.toml`, co
 broker's socket, says hello and keeps the connection open while the app holds bob (see
 [how bob runs](../../launcher/container_manager/README.md#how-bob-runs)). Quitting or crashing
 ends the lease; bob stops 90 seconds after the last app that uses it is gone. When the broker ends
-the lease (bob's container died, its broker was stopped, or another app restarted it), a bar above
+the lease (bob's sandbox exited, its broker was stopped, or another app restarted it), a bar above
 the chat says why and offers to join again. When bob already runs with another bob.toml (another
 program started it, or it still lingers after this app left it), the app joins it and asks whether
 to restart bob with its own bob.toml. Restarting stops bob for every program that holds it, so the
@@ -39,8 +39,9 @@ in `settings.json`, in `~/.config/ch.psi.bob` on Linux and `~/Library/Applicatio
 Support/ch.psi.bob` on macOS: the same file as the Tauri desktop app, so both start bob
 the same way. Look and layout are kept with QSettings. The executable defaults to `$BOB_BIN`, then
 `bob-manager` beside the app, then (in a build from a checkout) the checkout's
-`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. bob-manager and bob's image are
-installed separately.
+`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. bob-manager and OpenCode are
+installed separately, and bob itself runs on Linux only (see its
+[runtime requirements](../../launcher/container_manager/README.md#runtime-requirements)).
 
 ## Build and run
 
@@ -75,7 +76,7 @@ A plugin adds views for the tools of one kind of MCP server. bob.toml enables it
 
 ```toml
 [mcp.bec_mcp]
-url = "http://host.docker.internal:8000/mcp"
+url = "http://host.containers.internal:8000/mcp"
 plugin = "bec"
 ```
 
@@ -122,7 +123,7 @@ the caller allows more.
 
 | Path | What it holds |
 | --- | --- |
-| `src/bob/` | Talking to bob, without QML (library `bobcore`): the lease on bob (`bobsession`), its settings, running containers, the OpenCode client and event stream, the chat's sessions they keep current (`chatclient`), and the MCP client the plugins call through (`mcpclient`) |
+| `src/bob/` | Talking to bob, without QML (library `bobcore`): the lease on bob (`bobsession`), its settings, the OpenCode client and event stream, the chat's sessions they keep current (`chatclient`), and the MCP client the plugins call through (`mcpclient`) |
 | `src/gui/` | What the views read, QML module `Bob.Backend` on top of `bobcore`: the chat as the window shows it (`chat`), the models, preferences, desktop helpers and the plugins' MCP servers (`plugins`) |
 | `imports/Bob/` | The window, QML module `Bob`; `qmldir` lets Design Studio read it from the source tree |
 | `imports/Bob/Plugins/` | The plugins, one QML module each |
@@ -143,7 +144,7 @@ on the GitHub release and in Gitea (package `bob`, and the RPM in the `bec` RPM 
 
 - `bob-gui-<version>-1.el9.x86_64.rpm`: RHEL 9. RHEL 9 has no Qt 6.12 (EPEL 9 ships 6.10), so the
   RPM carries Qt's official binaries in `/opt/bob-gui`, with `bob-gui` on the PATH. It needs only
-  base RHEL 9 packages.
+  base RHEL 9 packages, `bubblewrap` among them for bob's sandbox.
 - `bob-gui_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with Qt inside the app. It is
   signed ad hoc, so macOS blocks its first start: allow it under System Settings → Privacy &
   Security, or run `xattr -dr com.apple.quarantine /Applications/bob-gui.app`.

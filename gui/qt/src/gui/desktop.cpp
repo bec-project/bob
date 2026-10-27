@@ -11,7 +11,6 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QGuiApplication>
-#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUrl>
@@ -80,14 +79,6 @@ QString Desktop::formatCost(double cost) const
 QString Desktop::relativeTime(double ms) const
 {
     return ChatLogic::relativeTime(ms, double(QDateTime::currentMSecsSinceEpoch()));
-}
-
-double Desktop::parseTime(const QString &iso) const
-{
-    // engines report nanoseconds; Qt reads milliseconds
-    static const QRegularExpression fraction(QStringLiteral("(\\.\\d{3})\\d+"));
-    const QDateTime time = QDateTime::fromString(QString(iso).replace(fraction, QStringLiteral("\\1")), Qt::ISODateWithMs);
-    return time.isValid() ? double(time.toMSecsSinceEpoch()) : 0;
 }
 
 int Desktop::clampWidth(double width, int min, int windowWidth) const

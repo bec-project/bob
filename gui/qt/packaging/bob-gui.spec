@@ -1,7 +1,7 @@
 # bob's desktop app for RHEL 9. RHEL 9 has no Qt 6.12 (EPEL 9 ships 6.10), so the app carries its
 # own copy of Qt's official binaries in /opt/bob-gui; ci/build_qt_rpm.sh installs them for the build
-# and passes their prefix as qt_prefix. bob-manager and bob's container image are installed
-# separately; the app finds bob-manager on the PATH.
+# and passes their prefix as qt_prefix. bob-manager and OpenCode are installed separately; the app
+# finds bob-manager on the PATH.
 %global bob_version %{?version_override}%{!?version_override:0.0.0}
 %global app_dir /opt/bob-gui
 # Qt's binaries come stripped and without debug information
@@ -14,7 +14,7 @@
 Name:           bob-gui
 Version:        %{bob_version}
 Release:        1%{?dist}
-Summary:        Desktop app for bob, the OpenCode assistant in a container
+Summary:        Desktop app for bob, the OpenCode assistant in a sandbox
 # The repository has no license file yet; the bundled Qt is LGPL-3.0-only
 License:        Proprietary AND LGPL-3.0-only
 URL:            https://github.com/bec-project/bob
@@ -31,9 +31,11 @@ BuildRequires:  mesa-libEGL-devel
 BuildRequires:  libxkbcommon-devel
 BuildRequires:  fontconfig
 BuildRequires:  dejavu-sans-fonts
+# bob-manager runs OpenCode in a bubblewrap sandbox
+Requires:       bubblewrap
 
 %description
-A chat window for the OpenCode server that bob runs in a Docker or Podman container. The app
+A chat window for the OpenCode server that bob runs in a bubblewrap sandbox. The app
 starts the user's bob through bob-manager, or joins the one that runs, and holds it while open.
 It brings its own Qt 6.12 in %{app_dir}.
 

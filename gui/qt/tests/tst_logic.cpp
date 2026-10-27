@@ -4,7 +4,6 @@
 #include "chatlogic.h"
 #include "connection.h"
 #include "eventstream.h"
-#include "runningbobs.h"
 #include "sessiondata.h"
 #include "threadmodel.h"
 #include "turns.h"
@@ -442,7 +441,7 @@ void TestLogic::showsAnEmptyChatAndASubAgentsSteps()
     QCOMPARE(kinds(steps), (QStringList{"markdown", "stopped"}));
 }
 
-// ---------- bob's settings and containers ----------
+// ---------- bob's settings ----------
 
 void TestLogic::readsAndSavesSettings()
 {
@@ -472,40 +471,6 @@ void TestLogic::readsAndSavesSettings()
     file.write(R"({"config":"/x/bob.toml"})");
     file.close();
     QVERIFY(BobSettingsStore(path).get().autoJoin);
-}
-
-void TestLogic::readsAConnectionFromInspect()
-{
-    auto inspect = [](const char *hostIp) {
-        QJsonObject entry = json(R"({
-            "Name": "/bob-501-abc",
-            "Config": {"Labels": {"io.bob.launch": "x"}, "Env": ["A=1", "OPENCODE_SERVER_PASSWORD=pw=1"],
-                       "WorkingDir": "/workspace", "Image": "localhost/bob"},
-            "State": {"StartedAt": "2026-10-21T12:00:00.123456789Z"},
-            "NetworkSettings": {"Ports": {"4096/tcp": [{"HostIp": "IP", "HostPort": "52997"}]}}})");
-        QJsonObject network = entry["NetworkSettings"].toObject();
-        QJsonObject ports = network["Ports"].toObject();
-        ports.insert("4096/tcp", QJsonArray{QJsonObject{{"HostIp", hostIp}, {"HostPort", "52997"}}});
-        network.insert("Ports", ports);
-        entry.insert("NetworkSettings", network);
-        return entry;
-    };
-    const auto bob = runningBob(inspect("0.0.0.0"), "docker");
-    QVERIFY(bob);
-    QCOMPARE(bob->url, QStringLiteral("http://127.0.0.1:52997"));
-    QCOMPARE(bob->password, QStringLiteral("pw=1"));
-    QCOMPARE(bob->container, QStringLiteral("bob-501-abc"));
-    QCOMPARE(bob->runtime, QStringLiteral("docker"));
-    QCOMPARE(bob->workspace, QStringLiteral("/workspace"));
-    QCOMPARE(runningBob(inspect("::"), "podman")->url, QStringLiteral("http://[::1]:52997"));
-    QCOMPARE(runningBob(inspect("fe80::1"), "podman")->url, QStringLiteral("http://[fe80::1]:52997"));
-    QCOMPARE(runningBob(inspect("10.0.0.2"), "podman")->url, QStringLiteral("http://10.0.0.2:52997"));
-
-    QJsonObject other = inspect("0.0.0.0");
-    QJsonObject config = other["Config"].toObject();
-    config.insert("Labels", QJsonObject());
-    other.insert("Config", config);
-    QVERIFY(!runningBob(other, "docker"));
 }
 
 QTEST_GUILESS_MAIN(TestLogic)

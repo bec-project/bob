@@ -3,10 +3,10 @@
 #include <QString>
 #include <QStringList>
 
-// Where bob's executable, configuration and container engines are found.
+// Where bob's executable, its configuration and the sandbox tool (bwrap) are found.
 namespace BobPaths {
 
-// PATH plus the folders bob and the engines are usually installed in: apps started from the
+// PATH plus the folders bob and bwrap are usually installed in: apps started from the
 // Dock, Finder or a desktop menu get a minimal PATH.
 QString enginePath();
 

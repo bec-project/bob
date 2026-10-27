@@ -31,5 +31,4 @@ private slots:
     void opensACompactionSummaryOntoAllItsParts();
     void showsAnEmptyChatAndASubAgentsSteps();
     void readsAndSavesSettings();
-    void readsAConnectionFromInspect();
 };

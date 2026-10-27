@@ -276,16 +276,13 @@ func TestHostMCPEarlyExitAndCancelledStartupCleanUp(t *testing.T) {
 }
 
 func TestHostMCPStartupFailureRemovesOwnedProcess(t *testing.T) {
-	options, root := cancellationEngine(t)
+	options, _ := sandboxEngine(t)
 	server, address := hostMCPFixture(t)
 	options.MCPServers = map[string]MCPServer{"bec_mcp": server}
-	if err := os.WriteFile(filepath.Join(root, "reject-create"), nil, 0600); err != nil {
-		t.Fatal(err)
-	}
 	manager := &Manager{}
 	_, err := manager.Start(context.Background(), options)
-	if err == nil || !strings.Contains(err.Error(), "No such image") {
-		t.Fatalf("expected create rejection: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "exited before becoming ready") {
+		t.Fatalf("expected the sandbox to fail: %v", err)
 	}
 	assertHostPortClosed(t, address)
 	if len(manager.hostMCPs) != 0 {
@@ -294,7 +291,7 @@ func TestHostMCPStartupFailureRemovesOwnedProcess(t *testing.T) {
 }
 
 func TestHostMCPInheritedDirectoryCannotBeAgentWritable(t *testing.T) {
-	options, _ := cancellationEngine(t)
+	options, _ := sandboxEngine(t)
 	server, _ := hostMCPFixture(t)
 	for _, directory := range []string{options.Workdir, filepath.Join(t.TempDir(), "alias")} {
 		if directory != options.Workdir {
@@ -339,7 +336,7 @@ socketserver.TCPServer(("127.0.0.1",int(sys.argv[1])),socketserver.BaseRequestHa
 }
 
 func TestHostMCPExecutableCannotBeAgentWritable(t *testing.T) {
-	options, _ := cancellationEngine(t)
+	options, _ := sandboxEngine(t)
 	server, _ := hostMCPFixture(t)
 	executable := filepath.Join(options.Workdir, "host-mcp")
 	if err := os.WriteFile(executable, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
@@ -361,7 +358,7 @@ func TestHostMCPExecutableCannotBeAgentWritable(t *testing.T) {
 }
 
 func TestHostMCPKeepsValidatedExecutableAfterPATHShadowAppears(t *testing.T) {
-	options, _ := cancellationEngine(t)
+	options, _ := sandboxEngine(t)
 	server, _ := hostMCPFixture(t)
 	installedDirectory := t.TempDir()
 	installed := filepath.Join(installedDirectory, "host-mcp")
@@ -389,7 +386,7 @@ func TestHostMCPKeepsValidatedExecutableAfterPATHShadowAppears(t *testing.T) {
 }
 
 func TestHostMCPRejectsWritableIntermediateSymlink(t *testing.T) {
-	options, _ := cancellationEngine(t)
+	options, _ := sandboxEngine(t)
 	server, _ := hostMCPFixture(t)
 	installed := filepath.Join(t.TempDir(), "installed-mcp")
 	if err := os.WriteFile(installed, []byte("#!/bin/sh\necho safe\n"), 0700); err != nil {
@@ -412,7 +409,7 @@ func TestHostMCPRejectsWritableIntermediateSymlink(t *testing.T) {
 }
 
 func TestHostMCPPreservesVirtualenvInterpreter(t *testing.T) {
-	options, _ := cancellationEngine(t)
+	options, _ := sandboxEngine(t)
 	server, _ := hostMCPFixture(t)
 	venv := filepath.Join(t.TempDir(), "venv")
 	if output, err := exec.Command(server.HostCommand[0], "-m", "venv", "--without-pip", "--symlinks", venv).CombinedOutput(); err != nil {

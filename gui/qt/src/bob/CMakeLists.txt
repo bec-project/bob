@@ -1,5 +1,5 @@
-# Everything about bob and OpenCode, without QML or a GUI: holding bob through its broker, finding
-# running bobs, OpenCode's REST API and event stream, and the session state they build.
+# Everything about bob and OpenCode, without QML or a GUI: holding bob through its broker,
+# OpenCode's REST API and event stream, and the session state they build.
 qt_add_library(bobcore STATIC
     bobpaths.cpp bobpaths.h
     bobsession.cpp bobsession.h
@@ -9,7 +9,6 @@ qt_add_library(bobcore STATIC
     eventstream.cpp eventstream.h
     mcpclient.cpp mcpclient.h
     opencodeapi.cpp opencodeapi.h
-    runningbobs.cpp runningbobs.h
     sessiondata.cpp sessiondata.h
     turns.cpp turns.h
 )

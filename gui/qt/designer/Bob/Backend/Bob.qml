@@ -17,16 +17,10 @@ QtObject {
     property bool autoJoin: true
     property string defaultConfig: "/home/me/bob.toml"
     property string defaultBinary: "/usr/bin/bob-manager"
-    property var running: [{
-        url: "http://127.0.0.1:52997", password: "", container: "bob-501-6c788c03", runtime: "docker",
-        workspace: "/home/me/project", image: "localhost/bob", started: new Date(Date.now() - 120000).toISOString()
-    }]
-    property bool listing: false
     property string version: "0.0.0"
 
     function join() {}
     function leave() {}
     function restart() {}
     function saveSettings(config, binary, autoJoin) { return "" }
-    function refreshRunning() {}
 }

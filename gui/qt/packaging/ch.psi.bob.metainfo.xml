@@ -2,13 +2,13 @@
 <component type="desktop-application">
   <id>ch.psi.bob</id>
   <name>bob</name>
-  <summary>Chat with the OpenCode assistant that bob runs in a container</summary>
+  <summary>Chat with the OpenCode assistant that bob runs in a sandbox</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <launchable type="desktop-id">ch.psi.bob.desktop</launchable>
   <description>
     <p>
       The desktop app of bob: it starts or joins the user's bob through bob-manager, holds it
-      while open, and chats with the OpenCode server in bob's container.
+      while open, and chats with the OpenCode server in bob's sandbox.
     </p>
   </description>
   <url type="homepage">https://github.com/bec-project/bob</url>

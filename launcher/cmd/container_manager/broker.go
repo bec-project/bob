@@ -12,8 +12,9 @@ package main
 // client that crashes ends its lease with it. A client can also send {"stop": true, "reason":
 // "<text>"} instead, to stop bob for every client (to start it again with another bob.toml, say).
 // When bob stops while clients hold it, each gets {"stopped": "<why>"} before its lease closes. The linger time after the last lease ends, the
-// broker stops bob and exits. It also checks that bob still runs: once its container stopped or
-// is gone, the broker closes every lease, cleans up and exits, so the next client starts a new bob.
+// broker stops bob and exits. It also checks that bob still runs: once its sandbox or one of its
+// host MCP servers exited, the broker closes every lease, cleans up and exits, so the next client
+// starts a new bob.
 
 import (
 	"bufio"
@@ -40,7 +41,7 @@ const (
 	brokerLog    = "broker.log"
 	// defaultLinger keeps bob through a client restart, such as reopening the GUI.
 	defaultLinger = 90 * time.Second
-	// clientDeadline covers a broker that is still removing the previous container.
+	// clientDeadline covers a broker that is still stopping the previous bob.
 	clientDeadline = 3 * time.Minute
 	helloTimeout   = 10 * time.Second
 )
@@ -53,8 +54,7 @@ var healthInterval = 5 * time.Second
 
 const (
 	healthTimeout = 10 * time.Second
-	// healthFailures checks in a row that the engine could not answer count as bob gone: with no
-	// engine (Docker Desktop quit, say) its containers are gone too.
+	// healthFailures checks in a row that could not tell whether bob runs count as bob gone.
 	healthFailures = 6
 )
 
@@ -62,7 +62,7 @@ const (
 type lifecycle interface {
 	Start(ctx context.Context, options containermanager.Options) (containermanager.Connection, error)
 	// Check returns nil while bob runs, an error wrapping containermanager.ErrStopped once it
-	// does not, and another error when the engine could not tell.
+	// does not, and another error when it could not tell.
 	Check(ctx context.Context) error
 	Stop(ctx context.Context) error
 }
@@ -230,8 +230,8 @@ func (b *broker) watch(done chan<- struct{}) {
 			if failures < healthFailures {
 				continue
 			}
-			b.logf("the engine did not answer %d checks in a row; ending every lease", failures)
-			reason = "bob stopped: the container engine stopped answering"
+			b.logf("%d checks in a row could not tell whether bob runs; ending every lease", failures)
+			reason = "bob stopped: it could not be checked"
 		}
 		b.requestStop(reason)
 		return

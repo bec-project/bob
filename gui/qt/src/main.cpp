@@ -1,5 +1,5 @@
 // bob's desktop app: a window that starts or joins the user's bob and chats with the OpenCode
-// server in its container.
+// server in its sandbox.
 
 #include "bob.h"
 #include "bobpaths.h"

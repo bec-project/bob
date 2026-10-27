@@ -239,11 +239,11 @@ private slots:
     void reportsAStartFailure()
     {
         BobSession session;
-        session.join(fakeBob(QStringLiteral("failing"), "#!/bin/sh\necho 'start the docker engine first' >&2\nexit 1\n"),
+        session.join(fakeBob(QStringLiteral("failing"), "#!/bin/sh\necho 'find bwrap on PATH' >&2\nexit 1\n"),
                      m_config);
         QTRY_COMPARE(session.status().state, BobStatus::Idle);
         QVERIFY2(session.status().error.contains(QStringLiteral("could not start")), qPrintable(session.status().error));
-        QVERIFY(session.status().error.contains(QStringLiteral("start the docker engine first")));
+        QVERIFY(session.status().error.contains(QStringLiteral("find bwrap on PATH")));
 
         session.join(fakeBob(QStringLiteral("unused"), "#!/bin/sh\n"), QStringLiteral("/nonexistent/bob.toml"));
         QCOMPARE(session.status().state, BobStatus::Idle);
@@ -300,9 +300,9 @@ private slots:
         session.join(printingSocket(socket), m_config);
         QTRY_COMPARE(session.status().state, BobStatus::Joined);
         QCOMPARE(session.status().consumers, 1);
-        broker.closeAll(QStringLiteral("bob stopped: its container is gone"));
+        broker.closeAll(QStringLiteral("bob stopped: its sandbox exited"));
         QTRY_COMPARE(session.status().state, BobStatus::Lost);
-        QCOMPARE(session.status().reason, QStringLiteral("bob stopped: its container is gone"));
+        QCOMPARE(session.status().reason, QStringLiteral("bob stopped: its sandbox exited"));
     }
 
     void joiningAgainWithAnotherConfigShowsTheMismatch()

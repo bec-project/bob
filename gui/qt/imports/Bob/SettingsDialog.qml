@@ -172,7 +172,7 @@ Dialog {
                             const connection = Chat.connection
                             const rows = [[qsTr("Server"), connection.url ?? ""]]
                             if (connection.container)
-                                rows.push([qsTr("Container"), connection.container + (connection.runtime ? " (%1)".arg(connection.runtime) : "")])
+                                rows.push([qsTr("Sandbox"), connection.container + (connection.runtime ? " (%1)".arg(connection.runtime) : "")])
                             if (connection.workspace)
                                 rows.push([qsTr("Workspace"), connection.workspace])
                             if (Chat.serverVersion)
@@ -206,7 +206,7 @@ Dialog {
                     AppButton {
                         text: dialog.held ? qsTr("Leave this bob") : qsTr("Switch bob…")
                         variant: dialog.held ? "danger" : "default"
-                        tip: dialog.held ? qsTr("End this app's hold on %1; its chats stay in the home volume").arg(Bob.status.container) : ""
+                        tip: dialog.held ? qsTr("End this app's hold on %1; its chats stay in its home folder").arg(Bob.status.container) : ""
                         onClicked: {
                             dialog.close()
                             Chat.leaveBob()

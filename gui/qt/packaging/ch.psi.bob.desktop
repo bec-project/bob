@@ -2,7 +2,7 @@
 Type=Application
 Name=bob
 GenericName=OpenCode assistant
-Comment=Chat with the OpenCode assistant that bob runs in a container
+Comment=Chat with the OpenCode assistant that bob runs in a sandbox
 Exec=bob-gui
 Icon=ch.psi.bob
 Terminal=false

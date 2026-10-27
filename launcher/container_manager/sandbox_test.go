@@ -59,7 +59,6 @@ func TestSandboxEndpointsRefuseLoopbackAndCollisions(t *testing.T) {
 
 func sandboxTestOptions(t *testing.T) resolvedOptions {
 	input := DefaultOptions()
-	input.Runtime = bubblewrapRuntime
 	input.BaseURL = "https://ai.example/api"
 	input.APIKey = "synthetic-token"
 	input.Home = "/data/bob/home"
@@ -75,7 +74,7 @@ func TestSandboxSeesOnlyWhatItIsGiven(t *testing.T) {
 	for _, value := range []string{
 		"--unshare-all", "--die-with-parent", "--new-session",
 		"--ro-bind /usr /usr", "--ro-bind /etc /etc", "--ro-bind /run/user/1000/bob-1/hosts /etc/hosts",
-		"--bind /run/user/1000/bob-1 /run/bob", "--bind /data/bob/home /home/opencode",
+		"--bind /run/user/1000/bob-1/sockets /run/bob", "--ro-bind /run/user/1000/bob-1/opencode.json /bob/opencode.json", "--bind /data/bob/home /home/opencode",
 		"--ro-bind /usr/bin/bob-manager /bob/bin/bob-manager", "--ro-bind /opt/bob/opencode /bob/bin/opencode",
 		"--bind /beamline/work /beamline/work", "--ro-bind /beamline/data /beamline/data",
 		"--chdir /beamline/work /bob/bin/bob-manager --sandbox-helper",
@@ -113,11 +112,8 @@ func TestSandboxEnvironmentPointsOpenCodeAtItsTunnels(t *testing.T) {
 	if settings["LLM_BASE_URL"] != "https://ai.example:10443/api" || settings["API_KEY"] != options.APIKey {
 		t.Fatalf("provider settings %q", settings["LLM_BASE_URL"])
 	}
-	if settings["HOME"] != sandboxHome || settings["OPENCODE_CONFIG"] != "/run/bob/opencode.json" {
+	if settings["HOME"] != sandboxHome || settings["OPENCODE_CONFIG"] != sandboxConfig {
 		t.Fatal("OpenCode's home or configuration is not the sandbox's")
-	}
-	if _, found := settings["BOB_EGRESS_URLS"]; found {
-		t.Fatal("container settings leak into the sandbox")
 	}
 	var plan sandboxPlan
 	if err := json.Unmarshal([]byte(settings[sandboxPlanVariable]), &plan); err != nil || len(plan.Endpoints) != 2 || plan.Server != sandboxServer {
@@ -125,16 +121,6 @@ func TestSandboxEnvironmentPointsOpenCodeAtItsTunnels(t *testing.T) {
 	}
 	if !strings.Contains(settings["OPENCODE_CONFIG_CONTENT"], `"url":"http://host.containers.internal:8020/mcp"`) {
 		t.Fatalf("MCP configuration %s", settings["OPENCODE_CONFIG_CONTENT"])
-	}
-}
-
-func TestOpenCodeConfigMatchesTheImage(t *testing.T) {
-	image, err := os.ReadFile(filepath.Join("..", "..", "containers", "opencode.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(image, openCodeConfig) {
-		t.Fatal("container_manager/opencode.json differs from containers/opencode.json; copy it over")
 	}
 }
 

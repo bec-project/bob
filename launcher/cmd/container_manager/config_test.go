@@ -23,14 +23,11 @@ func writeConfig(t *testing.T, content string) string {
 func TestOptionsLoadConfigAndResolvePaths(t *testing.T) {
 	t.Setenv("API_KEY", "synthetic-key")
 	// Configuration replaces the old environment overrides.
-	t.Setenv("BOB_RUNTIME", "invalid")
 	t.Setenv("LLM_MODEL_ID", "ignored")
 	path := writeConfig(t, `
-[container]
-runtime = "docker"
-image = "custom-image"
-home_volume = "custom-home"
-name = "custom-name"
+[sandbox]
+opencode = "/opt/bob/opencode"
+home = "bob-home"
 
 [workspace]
 workdir = "working"
@@ -44,7 +41,6 @@ context_limit = 262144
 output_limit = 16_384
 
 [mcp.bob]
-port = 19000
 host_command = ["python3", "/host/path with spaces/server.py", "--label", "a quoted \"value\""]
 url = "http://host.docker.internal:19000/mcp"
 `)
@@ -52,8 +48,8 @@ url = "http://host.docker.internal:19000/mcp"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Runtime != "docker" || input.Image != "custom-image" || input.HomeVolume != "custom-home" || input.Name != "custom-name" {
-		t.Fatalf("lost container configuration: %+v", input)
+	if input.OpenCode != "/opt/bob/opencode" || input.Home != filepath.Join(filepath.Dir(path), "bob-home") {
+		t.Fatalf("lost sandbox configuration: %+v", input)
 	}
 	if input.Workdir != filepath.Join(filepath.Dir(path), "working") || len(input.ReadWrite) != 2 || input.ReadWrite[0] != filepath.Join(filepath.Dir(path), "repo") || input.ReadWrite[1] != filepath.Join(filepath.Dir(path), "other") || len(input.ReadOnly) != 2 || input.ReadOnly[0] != filepath.Join(filepath.Dir(path), "notes") || input.ReadOnly[1] != "/absolute/data" {
 		t.Fatalf("incorrect paths: RW %v, RO %v", input.ReadWrite, input.ReadOnly)
@@ -61,8 +57,8 @@ url = "http://host.docker.internal:19000/mcp"
 	if !reflect.DeepEqual(input.MCPServers["bob"].HostCommand, []string{"python3", "/host/path with spaces/server.py", "--label", `a quoted "value"`}) {
 		t.Fatal("MCP command arguments changed")
 	}
-	if input.BaseURL != "http://example.invalid/v1" || input.Model != "custom-model" || input.APIKey != "synthetic-key" || input.MCPServers["bob"].Port != 19000 {
-		t.Fatal("lost provider or port configuration")
+	if input.BaseURL != "http://example.invalid/v1" || input.Model != "custom-model" || input.APIKey != "synthetic-key" || input.MCPServers["bob"].URL != "http://host.docker.internal:19000/mcp" {
+		t.Fatal("lost provider or MCP configuration")
 	}
 	if input.ContextLimit != 262144 || input.OutputLimit != 16384 {
 		t.Fatalf("lost model limits: context %d, output %d", input.ContextLimit, input.OutputLimit)
@@ -79,7 +75,8 @@ base_url = "http://example.invalid/v1"`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Runtime != "podman" || input.Image != "localhost/bob" || input.HomeVolume != containermanager.DefaultOptions().HomeVolume || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || len(input.MCPServers) != 0 || len(input.ReadWrite) != 0 || input.ContextLimit != 0 || input.OutputLimit != 0 {
+	defaults := containermanager.DefaultOptions()
+	if input.OpenCode != defaults.OpenCode || input.Home != defaults.Home || input.BindAddress != defaults.BindAddress || input.BaseURL != "http://example.invalid/v1" || input.Model != "Qwen3.8-27B" || len(input.MCPServers) != 0 || len(input.ReadWrite) != 0 || input.ContextLimit != 0 || input.OutputLimit != 0 {
 		t.Fatal("incorrect defaults")
 	}
 }
@@ -111,9 +108,20 @@ workdir = "/repo"
 ro = ["/notes"]
 trailing`,
 		`workspace = "/repo"`,
-		// OpenCode's own browser UI is gone: bob's GUI is the only one.
+		// bob no longer runs in a container.
 		`[container]
-web = true
+runtime = "podman"
+[workspace]
+workdir = "/repo"
+[provider]
+base_url = "http://example.invalid/v1"`,
+		`[workspace]
+workdir = "/repo"
+mount_label = "shared"
+[provider]
+base_url = "http://example.invalid/v1"`,
+		`[sandbox]
+image = "localhost/bob"
 [workspace]
 workdir = "/repo"
 [provider]
@@ -205,7 +213,7 @@ func TestOptionsRequireProviderURL(t *testing.T) {
 }
 
 func TestRemoteMCPAndBindAddress(t *testing.T) {
-	path := writeConfig(t, `[container]
+	path := writeConfig(t, `[sandbox]
 bind_address = "127.0.0.1"
 [workspace]
 workdir = "/repo"
@@ -223,24 +231,12 @@ url = "http://mcp.example:8000/mcp"
 	}
 }
 
-func TestMountLabelConfig(t *testing.T) {
-	path := writeConfig(t, "[workspace]\nworkdir = \"/repo\"\nmount_label = \"shared\"\n[provider]\nbase_url = \"https://provider.example.net/\"\n")
-	input, err := loadConfig(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if input.MountLabel != "shared" {
-		t.Fatal("mount labeling policy was not loaded")
-	}
-}
-
 func TestNamedMCPConfig(t *testing.T) {
 	path := writeConfig(t, `[workspace]
 workdir = "/repo"
 [provider]
 base_url = "http://example.invalid/v1"
 [mcp.bec_mcp]
-port = 19000
 url = "http://mcp.example:8000/mcp"
 plugin = "bec"
 [mcp.other_tools]
@@ -251,7 +247,7 @@ url = "https://tools.example/mcp"
 		t.Fatal(err)
 	}
 	want := map[string]containermanager.MCPServer{
-		"bec_mcp":     {Port: 19000, URL: "http://mcp.example:8000/mcp", Plugin: "bec"},
+		"bec_mcp":     {URL: "http://mcp.example:8000/mcp", Plugin: "bec"},
 		"other_tools": {URL: "https://tools.example/mcp"},
 	}
 	if !reflect.DeepEqual(input.MCPServers, want) {
@@ -266,6 +262,7 @@ func TestMCPConfigRejectsUnknownFieldsAndWrongTypes(t *testing.T) {
 		"[mcp.bec_mcp]\nurll = \"http://mcp.example/mcp\"",
 		"[mcp.bec_mcp]\ncommand = \"python3\"",
 		"[mcp.bec_mcp]\ncommand = [\"python3\"]",
+		"[mcp.bec_mcp]\nurl = \"http://mcp.example/mcp\"\nport = 19000",
 		"[mcp]\nport = 19000",
 		"[mcp]\nurl = \"http://mcp.example/mcp\"",
 		"[mcp.bec_mcp]\nurl = \"http://mcp.example/mcp\"\nplugin = 1",

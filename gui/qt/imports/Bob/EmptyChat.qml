@@ -23,7 +23,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: qsTr("The assistant runs in bob's container, with its tools and MCP servers.")
+            text: qsTr("The assistant runs in bob's sandbox, with its tools and MCP servers.")
             color: Theme.text3
             wrapMode: Text.Wrap
         }

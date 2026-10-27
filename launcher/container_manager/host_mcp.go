@@ -34,7 +34,7 @@ func hostMCPAddress(server MCPServer) (string, error) {
 	case "host.docker.internal", "host.containers.internal":
 		host = "127.0.0.1"
 	default:
-		return "", errors.New("host_command URL must use host.docker.internal or host.containers.internal so the container can reach it")
+		return "", errors.New("host_command URL must use host.containers.internal (or host.docker.internal), which bob-manager reaches on this machine's loopback")
 	}
 	port := endpoint.Port()
 	if port == "" {
@@ -46,10 +46,9 @@ func hostMCPAddress(server MCPServer) (string, error) {
 	return net.JoinHostPort(host, port), nil
 }
 
-// hostMCPURL is where this machine reaches an MCP server whose URL is written for the container:
-// the host's names in the container become loopback, and the container's own loopback becomes
-// the server's published port, when it has one.
-func hostMCPURL(server MCPServer, published string) string {
+// hostMCPURL is where this machine reaches an MCP server: the names the sandbox uses for this
+// machine become loopback.
+func hostMCPURL(server MCPServer) string {
 	endpoint, err := url.Parse(server.URL)
 	if err != nil {
 		return server.URL
@@ -60,10 +59,6 @@ func hostMCPURL(server MCPServer, published string) string {
 			endpoint.Host = net.JoinHostPort("127.0.0.1", port)
 		} else {
 			endpoint.Host = "127.0.0.1"
-		}
-	case "localhost", "127.0.0.1", "::1":
-		if published != "" {
-			endpoint.Host = strings.Replace(published, "0.0.0.0:", "127.0.0.1:", 1)
 		}
 	}
 	return endpoint.String()

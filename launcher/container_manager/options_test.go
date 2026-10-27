@@ -2,46 +2,10 @@ package containermanager
 
 import (
 	"os"
-	"os/user"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
-
-func TestMountLabelValidation(t *testing.T) {
-	input := DefaultOptions()
-	input.BaseURL = "https://provider.example/"
-	for _, policy := range []string{"", "shared", "private"} {
-		input.MountLabel = policy
-		if err := input.validate(); err != nil {
-			t.Fatal(err)
-		}
-	}
-	input.MountLabel = "invalid"
-	if err := input.validate(); err == nil {
-		t.Fatal("accepted invalid mount labeling policy")
-	}
-}
-
-func TestMCPPort(t *testing.T) {
-	for _, port := range []int{0, 1024, 19000, 65535} {
-		input := DefaultOptions()
-		input.BaseURL = "https://example.invalid/agent/"
-		input.MCPServers = map[string]MCPServer{"bob": {Port: port, URL: "http://example.invalid/mcp"}}
-		if err := input.validate(); err != nil {
-			t.Fatalf("rejected valid port %d: %v", port, err)
-		}
-	}
-	for _, port := range []int{-1, 1, 4096, 65536} {
-		input := DefaultOptions()
-		input.BaseURL = "https://example.invalid/agent/"
-		input.MCPServers = map[string]MCPServer{"bob": {Port: port, URL: "http://example.invalid/mcp"}}
-		if err := input.validate(); err == nil {
-			t.Fatalf("accepted invalid port %d", port)
-		}
-	}
-}
 
 func TestEndpointValidation(t *testing.T) {
 	for _, endpoint := range []string{"", "ftp://example.com", "https://user:secret@example.com", "https://example.com:70000", "https://example.com:0", "https://example.com/#fragment"} {
@@ -125,22 +89,22 @@ func TestMountsRequireWorkdir(t *testing.T) {
 	}
 }
 
-func TestMountsProtectContainerHome(t *testing.T) {
+func TestMountsProtectTheSandboxHome(t *testing.T) {
 	for _, path := range []string{"/", "/home", "/home/opencode", "/home/opencode/notes"} {
 		if !pathsOverlap(path, "/home/opencode") {
 			t.Fatalf("missed home overlap: %s", path)
 		}
 	}
 	if _, err := getDirectory("/"); err == nil {
-		t.Fatal("accepted a mount that hides the home volume")
+		t.Fatal("accepted a mount that hides the sandbox home")
 	}
 	if pathsOverlap("/home/other", "/home/opencode") {
 		t.Fatal("rejected an unrelated home directory")
 	}
 }
 
-func TestMountDestinationsProtectTemporaryFilesystemAndImageAliases(t *testing.T) {
-	for _, path := range []string{"/tmp", "/var", "/var/run", "/var/run/docker", "/var/lock", "/var/lock/agent", "/lib64", "/lib64/agent"} {
+func TestMountDestinationsProtectTheSandboxSystemDirectories(t *testing.T) {
+	for _, path := range []string{"/tmp", "/run", "/run/bob", "/lib64", "/lib64/agent", "/bob", "/usr/local", "/etc/pki"} {
 		if err := validateMountDestination(path); err == nil {
 			t.Errorf("accepted protected destination %s", path)
 		}
@@ -167,7 +131,7 @@ func TestNamedMCPValidation(t *testing.T) {
 		{"bec_mcp", MCPServer{URL: "ftp://example.invalid/mcp"}},
 		{"bec_mcp", MCPServer{URL: "http://example.invalid/mcp", Plugin: "Bec"}},
 		{"bec_mcp", MCPServer{URL: "http://example.invalid/mcp", Plugin: "../bec"}},
-		{"bec_mcp", MCPServer{Port: 19000, Plugin: "bec"}},
+		{"bec_mcp", MCPServer{Plugin: "bec"}},
 	} {
 		input := DefaultOptions()
 		input.BaseURL = "http://example.invalid/v1"
@@ -183,22 +147,6 @@ func TestNamedMCPValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.MCPServers = map[string]MCPServer{"bec_mcp": {URL: "http://example.invalid/mcp", Plugin: "bec"}}
-	if err := input.validate(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestMCPPortsMustBeUnique(t *testing.T) {
-	input := DefaultOptions()
-	input.BaseURL = "http://example.invalid/v1"
-	input.MCPServers = map[string]MCPServer{
-		"first":  {Port: 19000},
-		"second": {Port: 19000},
-	}
-	if err := input.validate(); err == nil {
-		t.Fatal("accepted duplicate published container ports")
-	}
-	input.MCPServers["second"] = MCPServer{Port: 19001}
 	if err := input.validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -271,16 +219,5 @@ func TestModelLimitDefaultsOutput(t *testing.T) {
 		if context, output := input.modelLimit(); context != test.wantContext || output != test.wantOutput {
 			t.Errorf("limits (%d, %d) resolved to (%d, %d), want (%d, %d)", test.context, test.output, context, output, test.wantContext, test.wantOutput)
 		}
-	}
-}
-
-func TestDefaultHomeVolumeBelongsToTheUser(t *testing.T) {
-	volume := DefaultOptions().HomeVolume
-	if !resourceName.MatchString(volume) || !strings.HasPrefix(volume, "bob-") || !strings.HasSuffix(volume, "-home") {
-		t.Fatalf("default home volume %q is not a per-user volume name", volume)
-	}
-	if current, err := user.Current(); err == nil && current.Username != "" && resourceName.MatchString(current.Username) &&
-		volume != "bob-"+current.Username+"-home" {
-		t.Fatalf("default home volume %q does not name user %s", volume, current.Username)
 	}
 }

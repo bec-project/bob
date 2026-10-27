@@ -23,7 +23,6 @@ QtObject {
         const minutes = Math.floor((Date.now() - ms) / 60000)
         return minutes < 1 ? "now" : minutes < 60 ? minutes + "m" : Math.floor(minutes / 60) + "h"
     }
-    function parseTime(iso) { return Date.parse(iso) || 0 }
     function clampWidth(width, min, windowWidth) { return Math.round(Math.min(Math.max(width, min), Math.max(min, windowWidth - 480))) }
     function patchHtml(patch, add, del, hunk) {
         return "<pre>" + patch.split("\n").map(line => line.startsWith("+") ? "<span style='color:" + add + "'>" + line + "</span>"

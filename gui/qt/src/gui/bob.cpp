@@ -11,7 +11,6 @@ Bob::Bob(const QString &settingsPath, QObject *parent)
     , m_settings(settingsPath)
 {
     connect(&m_session, &BobSession::statusChanged, this, &Bob::statusChanged);
-    connect(&m_lister, &RunningBobLister::finished, this, &Bob::runningChanged);
 }
 
 Bob *Bob::create(QQmlEngine *, QJSEngine *)
@@ -33,14 +32,6 @@ QString Bob::defaultConfig() const
 QString Bob::defaultBinary() const
 {
     return BobPaths::defaultBinary();
-}
-
-QVariantList Bob::running() const
-{
-    QVariantList list;
-    for (const RunningBob &bob : m_lister.found())
-        list.append(bob.toVariant());
-    return list;
 }
 
 QString Bob::version() const
@@ -78,10 +69,4 @@ QString Bob::saveSettings(const QString &config, const QString &binary, bool aut
     const QString error = m_settings.set({config, binary, autoJoin});
     emit settingsChanged();
     return error;
-}
-
-void Bob::refreshRunning()
-{
-    m_lister.refresh();
-    emit runningChanged();
 }

@@ -17,9 +17,8 @@ QString enginePath()
     const QString home = QDir::homePath();
     const QStringList extras = {
         QStringLiteral("/usr/local/bin"), QStringLiteral("/opt/homebrew/bin"),
-        QStringLiteral("/opt/podman/bin"), QStringLiteral("/usr/bin"), QStringLiteral("/bin"),
-        home + QStringLiteral("/.docker/bin"), home + QStringLiteral("/go/bin"),
-        home + QStringLiteral("/.local/bin"),
+        QStringLiteral("/usr/bin"), QStringLiteral("/bin"),
+        home + QStringLiteral("/go/bin"), home + QStringLiteral("/.local/bin"),
     };
     for (const QString &dir : extras) {
         if (!dirs.contains(dir))

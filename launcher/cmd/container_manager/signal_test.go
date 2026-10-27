@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -37,34 +38,27 @@ func waitForFile(t *testing.T, path string) {
 }
 
 func TestCtrlCDuringStartupAndCleanup(t *testing.T) {
-	testCtrlC(t, false)
-}
-
-func TestCtrlCReportsCleanupFailure(t *testing.T) {
-	testCtrlC(t, true)
-}
-
-func testCtrlC(t *testing.T, failCleanup bool) {
-	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("bob's sandbox runs on Linux only")
+	}
 	directory := t.TempDir()
-	engine := filepath.Join(directory, "docker")
-	// Model runtime subprocesses and a cleanup operation long enough to interrupt.
+	// A stand-in bwrap that never becomes ready, notes the stop it is asked for, and takes a while
+	// to finish it. The sandbox gets no variable of ours, so the script names its folder itself.
 	script := `#!/bin/sh
-case "$1" in
-    info) echo '[]'; exit 0 ;;
-    create) case "$*" in *"--entrypoint chown"*) echo synthetic-home-id; exit 0 ;; esac; touch "$BOB_SIGNAL_STATE/created"; echo synthetic-container-id; exit 0 ;;
-    start) if [ "$2" = --attach ]; then exit 0; fi; touch "$BOB_SIGNAL_STATE/up"; sleep 30; exit 0 ;;
-    inspect) echo 0; exit 0 ;;
-    ps) if [ -e "$BOB_SIGNAL_STATE/created" ]; then echo synthetic-container-id; fi; exit 0 ;;
-    rm) if [ "$3" = synthetic-home-id ]; then exit 0; fi; trap 'touch "$BOB_SIGNAL_STATE/interrupted"; exit 130' INT; touch "$BOB_SIGNAL_STATE/down"; sleep 0.5; if [ "$BOB_SIGNAL_FAIL_CLEANUP" = 1 ]; then echo "synthetic cleanup failure" >&2; exit 1; fi; rm "$BOB_SIGNAL_STATE/created"; touch "$BOB_SIGNAL_STATE/cleaned"; exit 0 ;;
-esac
-exit 0
+trap 'touch "` + directory + `/interrupted"; exit 130' INT
+trap 'touch "` + directory + `/down"; sleep 0.5; touch "` + directory + `/cleaned"; exit 0' TERM
+touch "` + directory + `/up"
+while :; do sleep 0.1; done
 `
-	if err := os.WriteFile(engine, []byte(script), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "bwrap"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	openCode := filepath.Join(directory, "opencode")
+	if err := os.WriteFile(openCode, []byte("#!/bin/sh\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	config := filepath.Join(directory, "bob.toml")
-	content := "[container]\nruntime = \"docker\"\n[workspace]\nworkdir = \".\"\n[provider]\nbase_url = \"http://127.0.0.1:12345/api/\"\n"
+	content := "[sandbox]\nopencode = \"" + openCode + "\"\nhome = \"home\"\n[workspace]\nworkdir = \".\"\n[provider]\nbase_url = \"http://model.example/api/\"\n"
 	if err := os.WriteFile(config, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -75,12 +69,8 @@ exit 0
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(brokerDir) })
 	cmd := exec.Command(os.Args[0], "-test.run=^TestSignalHelper$")
-	fail := "0"
-	if failCleanup {
-		fail = "1"
-	}
 	cmd.Env = append(os.Environ(), "BOB_SIGNAL_HELPER=1", "BOB_SIGNAL_CONFIG="+config,
-		"BOB_SIGNAL_STATE="+directory, "BOB_SIGNAL_FAIL_CLEANUP="+fail, "BOB_RUNTIME_DIR="+brokerDir, "PATH="+directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+		"BOB_RUNTIME_DIR="+brokerDir, "XDG_RUNTIME_DIR="+brokerDir, "PATH="+directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
@@ -117,22 +107,16 @@ exit 0
 	select {
 	case err := <-done:
 		finished = true
-		if failCleanup {
-			if err == nil || !bytes.Contains(output.Bytes(), []byte("cleanup:")) {
-				t.Fatalf("cleanup failure was not reported: %v %s", err, output.String())
-			}
-			return
-		}
 		if err != nil {
 			t.Fatalf("Ctrl-C failed: %v\n%s", err, output.String())
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("Ctrl-C did not finish cleanup")
 	}
 	if _, err := os.Stat(filepath.Join(directory, "interrupted")); !os.IsNotExist(err) {
-		t.Fatal("terminal Ctrl-C interrupted the cleanup command")
+		t.Fatal("terminal Ctrl-C reached the sandbox")
 	}
 	if _, err := os.Stat(filepath.Join(directory, "cleaned")); err != nil {
-		t.Fatal("cleanup did not complete")
+		t.Fatal("the sandbox did not finish its stop")
 	}
 }

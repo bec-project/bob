@@ -9,36 +9,26 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 )
-
-var resourceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 // pluginName is how GUIs name their plugins.
 var pluginName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // MCPServer configures an HTTP(S) MCP endpoint, optionally launched on the host.
 type MCPServer struct {
-	// Port optionally publishes a container TCP port on host loopback.
-	Port int
-	URL  string
-	// HostCommand starts a foreground HTTP MCP server outside the container.
+	URL string
+	// HostCommand starts a foreground HTTP MCP server outside the sandbox.
 	HostCommand []string
 	// Plugin names the GUI plugin that adds views for this server's tools; empty for none.
 	Plugin string
 }
 
 type Options struct {
-	Image       string
-	HomeVolume  string
-	Name        string
-	Runtime     string
 	Workdir     string
 	ReadWrite   []string
 	ReadOnly    []string
@@ -46,7 +36,6 @@ type Options struct {
 	Model       string
 	APIKey      string
 	BindAddress string
-	MountLabel  string
 	// ContextLimit is the model's context window in tokens. OpenCode uses it for its
 	// context meter and automatic compaction. Zero leaves OpenCode's model limits unset.
 	ContextLimit int
@@ -55,11 +44,9 @@ type Options struct {
 	OutputLimit int
 	// MCPServers maps OpenCode server names to their connection settings.
 	MCPServers map[string]MCPServer
-	// OpenCode is the OpenCode executable the bubblewrap runtime runs; a bare name is looked up
-	// on PATH.
+	// OpenCode is the OpenCode executable the sandbox runs; a bare name is looked up on PATH.
 	OpenCode string
-	// Home is the folder the bubblewrap runtime gives OpenCode as its home, in place of
-	// HomeVolume.
+	// Home is the folder that keeps OpenCode's home, configuration and sessions.
 	Home string
 }
 
@@ -71,9 +58,6 @@ const defaultOutputLimit = 32768
 // Callers must supply a working directory, a provider URL, and, when needed, an API key.
 func DefaultOptions() Options {
 	return Options{
-		Runtime:     "podman",
-		Image:       "localhost/bob",
-		HomeVolume:  defaultHomeVolume(),
 		Model:       "Qwen3.8-27B",
 		BindAddress: "0.0.0.0",
 		OpenCode:    "opencode",
@@ -81,49 +65,20 @@ func DefaultOptions() Options {
 	}
 }
 
-// defaultHomeVolume names one home volume per user, so users of one engine never share
-// sessions or file ownership.
-func defaultHomeVolume() string {
-	name := ""
-	if current, err := user.Current(); err == nil {
-		name = current.Username
-	}
-	name = strings.Map(func(r rune) rune {
-		if r < utf8.RuneSelf && (r == '_' || r == '.' || r == '-' || unicode.IsLetter(r) || unicode.IsDigit(r)) {
-			return r
-		}
-		return '-'
-	}, name)
-	if name == "" {
-		name = strconv.Itoa(os.Getuid())
-	}
-	return "bob-" + name + "-home"
-}
-
 func (input Options) validate() error {
-	if input.MountLabel != "" && input.MountLabel != "shared" && input.MountLabel != "private" {
-		return errors.New("workspace.mount_label must be shared or private, or omitted for pre-labeled mounts")
-	}
 	if _, err := getEndpoint(input.BaseURL); err != nil {
 		return err
 	}
-	ports := map[int]string{}
 	for name, server := range input.MCPServers {
 		if strings.TrimSpace(name) == "" || strings.ContainsRune(name, '\x00') {
 			return errors.New("MCP server names must be nonempty and cannot contain NUL bytes")
-		}
-		if server.Port != 0 {
-			if previous, exists := ports[server.Port]; exists {
-				return fmt.Errorf("MCP servers %q and %q use the same container port %d", previous, name, server.Port)
-			}
-			ports[server.Port] = name
 		}
 		if err := server.validate(); err != nil {
 			return fmt.Errorf("mcp.%s: %w", name, err)
 		}
 	}
 	if input.BindAddress != "" && net.ParseIP(input.BindAddress) == nil {
-		return errors.New("container.bind_address must be an IP address")
+		return errors.New("sandbox.bind_address must be an IP address")
 	}
 	if input.Model == "" {
 		return errors.New("enter a model ID")
@@ -139,12 +94,6 @@ func (input Options) validate() error {
 	}
 	if input.OutputLimit != 0 && input.OutputLimit >= input.ContextLimit {
 		return errors.New("provider.output_limit must be smaller than provider.context_limit")
-	}
-	if !resourceName.MatchString(input.HomeVolume) {
-		return errors.New("a valid named home volume is required")
-	}
-	if input.Name != "" && !resourceName.MatchString(input.Name) {
-		return errors.New("invalid container name")
 	}
 	return nil
 }
@@ -162,27 +111,16 @@ func (input Options) modelLimit() (int, int) {
 }
 
 func (server MCPServer) validate() error {
-	if server.Port != 0 && (server.Port < 1024 || server.Port > 65535 || server.Port == 4096) {
-		return errors.New("MCP port must be between 1024 and 65535, excluding OpenCode port 4096")
+	if server.URL == "" {
+		return errors.New("MCP server requires url")
 	}
-	if server.URL != "" {
-		if _, err := getEndpoint(server.URL); err != nil {
-			return err
-		}
-	}
-	if server.Port == 0 && server.URL == "" {
-		return errors.New("MCP server requires url or a published port")
+	if _, err := getEndpoint(server.URL); err != nil {
+		return err
 	}
 	if server.Plugin != "" && !pluginName.MatchString(server.Plugin) {
 		return errors.New("plugin must be a lowercase name such as bec")
 	}
-	if server.Plugin != "" && server.URL == "" {
-		return errors.New("plugin requires url")
-	}
 	if len(server.HostCommand) > 0 {
-		if server.URL == "" {
-			return errors.New("host_command requires url")
-		}
 		if _, err := hostMCPAddress(server); err != nil {
 			return err
 		}
@@ -215,18 +153,16 @@ func getEndpoint(value string) (*url.URL, error) {
 // resolvedOptions holds the configuration prepared for starting a backend.
 type resolvedOptions struct {
 	Options
-	workdir    string
-	binary     string
-	mounts     []mount
-	userConfig userSettings
-	password   string
-	launchID   string
+	workdir string
+	// binary is bwrap.
+	binary   string
+	mounts   []mount
+	password string
+	// name tells this launch apart from the next.
+	name string
 }
 
 func getResolvedOptions(input Options) (resolvedOptions, error) {
-	if input.Image == "" {
-		input.Image = DefaultOptions().Image
-	}
 	if input.BindAddress == "" {
 		input.BindAddress = DefaultOptions().BindAddress
 	}
@@ -241,9 +177,9 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 	}
 	options := resolvedOptions{Options: input}
 	var err error
-	options.binary, err = getExecutable(input.Runtime)
+	options.binary, err = exec.LookPath("bwrap")
 	if err != nil {
-		return resolvedOptions{}, err
+		return resolvedOptions{}, fmt.Errorf("find bwrap on PATH; install bubblewrap: %w", err)
 	}
 	options.mounts, err = getMounts(options.Options)
 	if err != nil {
@@ -296,7 +232,7 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 				return resolvedOptions{}, fmt.Errorf("mcp.%s host executable must not overlap writable agent mounts", name)
 			}
 		}
-		// Do not repeat PATH lookup after engine preparation: an agent could
+		// Do not repeat PATH lookup after sandbox preparation: an agent could
 		// create a shadow executable in an earlier, writable PATH directory.
 		server.HostCommand = append([]string(nil), server.HostCommand...)
 		server.HostCommand[0] = executable
@@ -308,13 +244,7 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 		return resolvedOptions{}, err
 	}
 	options.password = hex.EncodeToString(token[:])
-	if _, err := rand.Read(token[:]); err != nil {
-		return resolvedOptions{}, err
-	}
-	options.launchID = hex.EncodeToString(token[:])
-	if options.Name == "" {
-		options.Name = fmt.Sprintf("bob-%d-%s", os.Getuid(), options.password[:8])
-	}
+	options.name = fmt.Sprintf("bob-%d-%s", os.Getuid(), options.password[:8])
 	return options, nil
 }
 
@@ -395,9 +325,6 @@ func getDirectory(path string) (string, error) {
 	if !info.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", path)
 	}
-	if strings.ContainsAny(path, ",:\n") {
-		return "", errors.New("mount paths cannot contain commas, colons, or newlines")
-	}
 	if err := validateMountDestination(path); err != nil {
 		return "", err
 	}
@@ -406,16 +333,15 @@ func getDirectory(path string) (string, error) {
 
 func validateMountDestination(path string) error {
 	if path == "/tmp" {
-		return errors.New("/tmp is reserved for the container's temporary filesystem")
+		return errors.New("/tmp is reserved for the sandbox's temporary filesystem")
 	}
-	if pathsOverlap(path, "/home/opencode") {
-		return errors.New("bind mounts must not overlap the container home volume")
+	if pathsOverlap(path, sandboxHome) {
+		return errors.New("bind mounts must not overlap the sandbox's home")
 	}
-	// Include destination aliases in the bundled Alpine image. Resolving host
-	// symlinks alone cannot detect aliases in the container's filesystem.
-	for _, protected := range []string{"/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/sys", "/dev", "/run", "/var/run", "/var/lock"} {
+	// The sandbox builds these itself, read-only or private.
+	for _, protected := range []string{"/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/sys", "/dev", "/run", "/bob"} {
 		if pathsOverlap(path, protected) {
-			return errors.New("bind mounts must not overlap container system directories")
+			return errors.New("bind mounts must not overlap the sandbox's system directories")
 		}
 	}
 	return nil
@@ -445,7 +371,7 @@ func getMounts(input Options) ([]mount, error) {
 			}
 			duplicate := false
 			for i, previous := range mounts {
-				// Ensure that read-only and writable directories do not overlap, as this can cause issues with container mounts.
+				// Read-only and writable directories must not overlap, or one would undo the other.
 				if group.readOnly != previous.readOnly &&
 					(pathsOverlap(resolved, resolvedPaths[i]) || pathsOverlap(path, previous.path)) {
 					return nil, errors.New("read-only and writable directories must not overlap")
@@ -467,4 +393,13 @@ func getMounts(input Options) ([]mount, error) {
 func pathsOverlap(a, b string) bool {
 	separator := string(filepath.Separator)
 	return a == b || strings.HasPrefix(a, strings.TrimSuffix(b, separator)+separator) || strings.HasPrefix(b, strings.TrimSuffix(a, separator)+separator)
+}
+
+func mcpServerNames(servers map[string]MCPServer) []string {
+	names := make([]string, 0, len(servers))
+	for name := range servers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

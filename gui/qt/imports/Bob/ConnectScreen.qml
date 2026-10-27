@@ -22,7 +22,6 @@ Item {
         return saveError === ""
     }
 
-    Component.onCompleted: Bob.refreshRunning()
 
     Flickable {
         id: scroll
@@ -70,7 +69,7 @@ Item {
                     Text {
                         Layout.topMargin: 4
                         Layout.fillWidth: true
-                        text: qsTr("Connect to the OpenCode server that bob runs in its container.")
+                        text: qsTr("Connect to the OpenCode server that bob runs in its sandbox.")
                         color: Theme.text2
                         wrapMode: Text.Wrap
                     }
@@ -187,99 +186,6 @@ Item {
                                     Chat.joinBob()
                             }
                         }
-                    }
-
-                    // ---------- running bobs ----------
-                    RowLayout {
-                        Layout.topMargin: 22
-                        Layout.fillWidth: true
-                        Text {
-                            Layout.fillWidth: true
-                            text: qsTr("Running bobs")
-                            color: Theme.text
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-                        Spinner {
-                            visible: Bob.listing
-                        }
-                        IconButton {
-                            visible: !Bob.listing
-                            iconName: "refresh"
-                            iconSize: 14
-                            tip: qsTr("Look again")
-                            onClicked: Bob.refreshRunning()
-                        }
-                    }
-                    Text {
-                        visible: !Bob.listing && Bob.running.length === 0
-                        Layout.topMargin: 4
-                        text: qsTr("No bob container runs on Docker or Podman.")
-                        color: Theme.text3
-                        font.pixelSize: 13
-                    }
-                    Repeater {
-                        model: Bob.running
-                        delegate: RowLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            Layout.topMargin: 8
-                            spacing: 8
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 2
-                                RowLayout {
-                                    spacing: 6
-                                    Text {
-                                        text: modelData.container
-                                        color: Theme.text
-                                        font.pixelSize: 13
-                                        font.family: Theme.mono
-                                    }
-                                    Chip {
-                                        visible: Bob.state === "joined" && Bob.status.container === modelData.container
-                                        text: qsTr("held")
-                                    }
-                                }
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: {
-                                        Clock.now
-                                        return "%1 · %2 · started %3 ago".arg(modelData.workspace || "?").arg(modelData.runtime)
-                                            .arg(Desktop.relativeTime(Desktop.parseTime(modelData.started)))
-                                    }
-                                    color: Theme.text3
-                                    font.pixelSize: 12
-                                    elide: Text.ElideMiddle
-                                    HoverHandler {
-                                        id: workspaceHover
-                                    }
-                                    ToolTip.visible: workspaceHover.hovered && !!modelData.workspace
-                                    ToolTip.text: modelData.workspace ?? ""
-                                    ToolTip.delay: 500
-                                }
-                            }
-                            AppButton {
-                                text: qsTr("Connect")
-                                small: true
-                                onClicked: Chat.connectTo({
-                                    url: modelData.url,
-                                    password: modelData.password,
-                                    container: modelData.container,
-                                    runtime: modelData.runtime,
-                                    workspace: modelData.workspace
-                                })
-                            }
-                        }
-                    }
-                    Text {
-                        visible: Bob.running.length > 0
-                        Layout.topMargin: 6
-                        Layout.fillWidth: true
-                        text: qsTr("Connecting here does not hold the bob: it keeps the lifetime it was started with.")
-                        color: Theme.text3
-                        font.pixelSize: 12
-                        wrapMode: Text.Wrap
                     }
 
                     // ---------- by hand ----------

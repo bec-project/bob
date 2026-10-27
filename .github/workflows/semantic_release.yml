@@ -46,18 +46,6 @@ jobs:
           GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
         run: bash ci/publish_release.sh
 
-  container:
-    needs: release
-    if: needs.release.outputs.release_available == 'true'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/container_build.yml
-    secrets:
-      GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
-    with:
-      ref: ${{ github.sha }}
-      version: ${{ needs.release.outputs.version }}
-
   qt-desktop:
     needs: release
     if: needs.release.outputs.release_available == 'true'

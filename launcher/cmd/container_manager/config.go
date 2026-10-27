@@ -14,20 +14,19 @@ import (
 
 // config describes the TOML sections; the manager receives plain Options.
 type config struct {
-	Container struct {
-		Runtime     string `toml:"runtime"`
-		Image       string `toml:"image"`
-		HomeVolume  string `toml:"home_volume"`
-		Name        string `toml:"name"`
-		BindAddress string `toml:"bind_address"`
+	Sandbox struct {
 		OpenCode    string `toml:"opencode"`
 		Home        string `toml:"home"`
-	} `toml:"container"`
-	Workspace struct {
-		Workdir    string   `toml:"workdir"`
-		RW         []string `toml:"rw"`
-		RO         []string `toml:"ro"`
-		MountLabel string   `toml:"mount_label"`
+		BindAddress string `toml:"bind_address"`
+	} `toml:"sandbox"`
+	// Decode only to explain the removed section; bob no longer runs in a container.
+	UnsupportedContainer any `toml:"container"`
+	Workspace            struct {
+		Workdir string   `toml:"workdir"`
+		RW      []string `toml:"rw"`
+		RO      []string `toml:"ro"`
+		// Decode only to explain the removed setting.
+		UnsupportedMountLabel any `toml:"mount_label"`
 	} `toml:"workspace"`
 	Provider struct {
 		BaseURL      string  `toml:"base_url"`
@@ -37,24 +36,21 @@ type config struct {
 		OutputLimit  int     `toml:"output_limit"`
 	} `toml:"provider"`
 	MCP map[string]struct {
-		Port        int      `toml:"port"`
 		URL         string   `toml:"url"`
 		HostCommand []string `toml:"host_command"`
 		Plugin      string   `toml:"plugin"`
-		// Decode only to explain the removed setting; never forward or execute it.
+		// Decode only to explain the removed settings; never forward or execute them.
 		UnsupportedCommand any `toml:"command"`
+		UnsupportedPort    any `toml:"port"`
 	} `toml:"mcp"`
 }
 
 func loadConfig(path string) (containermanager.Options, error) {
 	input := containermanager.DefaultOptions()
 	var settings config
-	settings.Container.Runtime = input.Runtime
-	settings.Container.Image = input.Image
-	settings.Container.HomeVolume = input.HomeVolume
-	settings.Container.BindAddress = input.BindAddress
-	settings.Container.OpenCode = input.OpenCode
-	settings.Container.Home = input.Home
+	settings.Sandbox.BindAddress = input.BindAddress
+	settings.Sandbox.OpenCode = input.OpenCode
+	settings.Sandbox.Home = input.Home
 	settings.Provider.Model = input.Model
 	file, err := os.Open(path)
 	if err != nil {
@@ -67,22 +63,23 @@ func loadConfig(path string) (containermanager.Options, error) {
 	if err := decoder.Decode(&settings); err != nil {
 		return input, fmt.Errorf("read config %s: %w", path, err)
 	}
+	if settings.UnsupportedContainer != nil {
+		return input, errors.New("bob no longer runs in a container: replace [container] with [sandbox] (opencode, home, bind_address); see deploy/bob.example.toml")
+	}
+	if settings.Workspace.UnsupportedMountLabel != nil {
+		return input, errors.New("workspace.mount_label was for containers; remove it")
+	}
 	input = containermanager.Options{
-		Runtime:      settings.Container.Runtime,
-		Image:        settings.Container.Image,
-		HomeVolume:   settings.Container.HomeVolume,
-		Name:         settings.Container.Name,
 		Workdir:      settings.Workspace.Workdir,
 		ReadWrite:    settings.Workspace.RW,
 		ReadOnly:     settings.Workspace.RO,
-		MountLabel:   settings.Workspace.MountLabel,
 		BaseURL:      settings.Provider.BaseURL,
 		Model:        settings.Provider.Model,
 		ContextLimit: settings.Provider.ContextLimit,
 		OutputLimit:  settings.Provider.OutputLimit,
-		BindAddress:  settings.Container.BindAddress,
-		OpenCode:     settings.Container.OpenCode,
-		Home:         settings.Container.Home,
+		BindAddress:  settings.Sandbox.BindAddress,
+		OpenCode:     settings.Sandbox.OpenCode,
+		Home:         settings.Sandbox.Home,
 		APIKey:       os.Getenv("API_KEY"),
 	}
 	if len(settings.MCP) > 0 {
@@ -91,8 +88,11 @@ func loadConfig(path string) (containermanager.Options, error) {
 			if server.UnsupportedCommand != nil {
 				return input, fmt.Errorf("mcp.%s.command is unsupported; use url with host_command for host startup", name)
 			}
+			if server.UnsupportedPort != nil {
+				return input, fmt.Errorf("mcp.%s.port published a container port; the sandbox has none, so remove it", name)
+			}
 			input.MCPServers[name] = containermanager.MCPServer{
-				Port: server.Port, URL: server.URL,
+				URL:         server.URL,
 				HostCommand: server.HostCommand,
 				Plugin:      server.Plugin,
 			}

@@ -2,13 +2,12 @@
 
 #include "bobsession.h"
 #include "bobsettings.h"
-#include "runningbobs.h"
 
 #include <QObject>
 #include <QQmlEngine>
 
-// The app's side of bob for QML: the lease (BobSession), how bob is started (settings.json) and
-// the bob containers running on this machine. One instance, created before the window.
+// The app's side of bob for QML: the lease (BobSession) and how bob is started (settings.json).
+// One instance, created before the window.
 class Bob : public QObject
 {
     Q_OBJECT
@@ -23,8 +22,6 @@ class Bob : public QObject
     // What an empty field stands for
     Q_PROPERTY(QString defaultConfig READ defaultConfig NOTIFY settingsChanged)
     Q_PROPERTY(QString defaultBinary READ defaultBinary NOTIFY settingsChanged)
-    Q_PROPERTY(QVariantList running READ running NOTIFY runningChanged)
-    Q_PROPERTY(bool listing READ listing NOTIFY runningChanged)
     Q_PROPERTY(QString version READ version CONSTANT)
 
 public:
@@ -43,8 +40,6 @@ public:
     bool autoJoin() const { return m_settings.get().autoJoin; }
     QString defaultConfig() const;
     QString defaultBinary() const;
-    QVariantList running() const;
-    bool listing() const { return m_lister.listing(); }
     QString version() const;
 
     // Joins (or starts) bob when the app opens, unless that is switched off.
@@ -58,15 +53,12 @@ public:
     Q_INVOKABLE void restart();
     // Saves how the app starts bob; it applies from the next join. Returns an error or "".
     Q_INVOKABLE QString saveSettings(const QString &config, const QString &binary, bool autoJoin);
-    Q_INVOKABLE void refreshRunning();
 
 signals:
     void statusChanged();
     void settingsChanged();
-    void runningChanged();
 
 private:
     BobSession m_session;
     BobSettingsStore m_settings;
-    RunningBobLister m_lister;
 };
