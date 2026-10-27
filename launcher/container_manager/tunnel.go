@@ -71,6 +71,49 @@ func dialTCP(address string) func(context.Context) (net.Conn, error) {
 	}
 }
 
+// dialEndpoint dials an endpoint's target, refusing an address it must not reach. The check runs
+// on the address actually dialled, after the name was resolved, so a name that later resolves
+// elsewhere is caught too.
+func dialEndpoint(endpoint sandboxEndpoint) func(context.Context) (net.Conn, error) {
+	return func(ctx context.Context) (net.Conn, error) {
+		dialer := net.Dialer{Control: func(_, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			return checkEndpointAddress(net.ParseIP(host), endpoint.thisMachine)
+		}}
+		return dialer.DialContext(ctx, "tcp", endpoint.target)
+	}
+}
+
+// awsMetadataIPv6 is the cloud metadata service's IPv6 address; its IPv4 one is link-local.
+var awsMetadataIPv6 = net.ParseIP("fd00:ec2::254")
+
+// checkEndpointAddress refuses addresses an endpoint must not lead to: this machine's loopback
+// (except for host.containers.internal, which means this machine), link-local addresses, which
+// include the cloud metadata service at 169.254.169.254, and unspecified, multicast and broadcast
+// addresses.
+func checkEndpointAddress(ip net.IP, thisMachine bool) error {
+	if ip == nil {
+		return errors.New("not an IP address")
+	}
+	if mapped := ip.To4(); mapped != nil {
+		ip = mapped
+	}
+	switch {
+	case ip.IsLoopback() && thisMachine:
+		return nil
+	case ip.IsLoopback():
+		return fmt.Errorf("%s is this machine's loopback; reach the host as host.containers.internal", ip)
+	case ip.IsLinkLocalUnicast(), ip.Equal(awsMetadataIPv6):
+		return fmt.Errorf("%s is link-local, where cloud metadata services live", ip)
+	case ip.IsUnspecified(), ip.IsMulticast(), ip.IsLinkLocalMulticast(), ip.Equal(net.IPv4bcast), ip.To4() != nil && ip.To4()[0] == 0:
+		return fmt.Errorf("%s is not a host address", ip)
+	}
+	return nil
+}
+
 func dialUnix(path string) func(context.Context) (net.Conn, error) {
 	return func(ctx context.Context) (net.Conn, error) {
 		var dialer net.Dialer
@@ -105,6 +148,8 @@ type sandboxEndpoint struct {
 	// Socket is the tunnel's socket file in the run directory.
 	Socket string `json:"socket"`
 	target string
+	// thisMachine marks host.containers.internal, which bob-manager reaches on loopback.
+	thisMachine bool
 }
 
 // RunSandboxHelper runs in the sandbox, in place of OpenCode: it opens the tunnels the plan in

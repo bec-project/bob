@@ -2,11 +2,13 @@ package containermanager
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -23,7 +25,7 @@ func TestSandboxEndpointsKeepNamesAndMoveLowPorts(t *testing.T) {
 	}
 	want := []sandboxEndpoint{
 		{Listen: "127.0.0.2:10443", Socket: "out-0.sock", target: "ai.example:443"},
-		{Listen: "127.0.0.3:8020", Socket: "out-1.sock", target: "127.0.0.1:8020"},
+		{Listen: "127.0.0.3:8020", Socket: "out-1.sock", target: "127.0.0.1:8020", thisMachine: true},
 		{Listen: "127.0.0.4:9000", Socket: "out-2.sock", target: "192.0.2.7:9000"},
 		{Listen: "127.0.0.2:8443", Socket: "out-3.sock", target: "ai.example:8443"},
 	}
@@ -225,4 +227,47 @@ func TestOpenCodeIsFoundBesideBobManager(t *testing.T) {
 	if _, err := findOpenCode("missing-opencode", helper); err == nil {
 		t.Fatal("found a missing OpenCode")
 	}
+}
+
+func TestEndpointAddressesAreChecked(t *testing.T) {
+	for address, thisMachine := range map[string]bool{"192.0.2.7": false, "10.1.2.3": false, "2001:db8::1": false, "127.0.0.1": true} {
+		if err := checkEndpointAddress(net.ParseIP(address), thisMachine); err != nil {
+			t.Errorf("refused %s: %v", address, err)
+		}
+	}
+	for _, address := range []string{"127.0.0.1", "::1", "169.254.169.254", "fe80::1", "fd00:ec2::254", "0.0.0.0", "0.1.2.3", "::", "224.0.0.1", "255.255.255.255", "::ffff:169.254.169.254"} {
+		if err := checkEndpointAddress(net.ParseIP(address), false); err == nil {
+			t.Errorf("allowed %s", address)
+		}
+	}
+	if _, _, _, err := getSandboxEndpoints([]string{"http://169.254.169.254/latest"}); err == nil {
+		t.Fatal("accepted the metadata service as an endpoint")
+	}
+}
+
+func TestTunnelsRefuseNamesThatResolveToLoopback(t *testing.T) {
+	server, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	go func() {
+		for {
+			conn, err := server.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
+	}()
+	port := server.Addr().(*net.TCPAddr).Port
+	target := net.JoinHostPort("localhost", strconv.Itoa(port))
+	if _, err := dialEndpoint(sandboxEndpoint{target: target})(context.Background()); err == nil {
+		t.Fatal("a name resolving to loopback was dialled")
+	}
+	conn, err := dialEndpoint(sandboxEndpoint{target: net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), thisMachine: true})(context.Background())
+	if err != nil {
+		t.Fatalf("host.containers.internal was refused: %v", err)
+	}
+	conn.Close()
 }

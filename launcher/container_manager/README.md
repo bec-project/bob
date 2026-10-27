@@ -202,7 +202,10 @@ The sandbox cannot bind ports below 1024, so those endpoints move up by 10000 in
 reaches `https://ai.example/api` as `https://ai.example:10443/api`, and the server sees that port
 in the `Host` header. An endpoint given as an IP address is reached at its loopback address.
 Endpoint URLs cannot use `localhost` or a loopback address, since the sandbox has its own
-loopback. `host.containers.internal` and `host.docker.internal` mean this machine: bob-manager
+loopback. bob-manager also refuses an endpoint that leads to a loopback, link-local (which
+includes the cloud metadata service at `169.254.169.254`), unspecified, multicast or broadcast
+address: once when it starts, for every name it can resolve, and again on the address each
+connection actually dials, so a name that later resolves elsewhere is caught too. `host.containers.internal` and `host.docker.internal` mean this machine: bob-manager
 dials `127.0.0.1`, so a host MCP server can listen on `127.0.0.1` only. Two endpoints of one host
 whose ports meet in the sandbox (443 and 10443, say) are rejected.
 

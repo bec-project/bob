@@ -127,6 +127,9 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err != nil {
 		return connection, err
 	}
+	if err := checkEndpointNames(ctx, endpoints); err != nil {
+		return connection, err
+	}
 	runDir, err := os.MkdirTemp(sandboxRunBase(), "bob-")
 	if err != nil {
 		return connection, err
@@ -168,7 +171,7 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 			return connection, err
 		}
 		sandbox.listeners = append(sandbox.listeners, listener)
-		go serveTunnel(listener, dialTCP(endpoint.target))
+		go serveTunnel(listener, dialEndpoint(endpoint))
 	}
 
 	env, err := getSandboxEnvironment(options, inside, endpoints)
@@ -345,6 +348,33 @@ func defaultSandboxHome() string {
 	return filepath.Join(data, "bob", "home")
 }
 
+// checkEndpointNames resolves every endpoint once at start, so a name that leads somewhere it
+// must not is refused before bob starts; each connection is checked again when it is dialled. A
+// name that does not resolve now is left to the dial.
+func checkEndpointNames(ctx context.Context, endpoints []sandboxEndpoint) error {
+	for _, endpoint := range endpoints {
+		if endpoint.thisMachine {
+			continue
+		}
+		host, _, err := net.SplitHostPort(endpoint.target)
+		if err != nil {
+			return err
+		}
+		lookup, cancel := context.WithTimeout(ctx, 5*time.Second)
+		addresses, err := net.DefaultResolver.LookupIPAddr(lookup, host)
+		cancel()
+		if err != nil {
+			continue
+		}
+		for _, address := range addresses {
+			if err := checkEndpointAddress(address.IP, false); err != nil {
+				return fmt.Errorf("endpoint %s resolves to %w", host, err)
+			}
+		}
+	}
+	return nil
+}
+
 // getSandboxEndpoints gives every endpoint URL a tunnel: a loopback address per host and a port
 // per host and port. Ports below 1024 move up by 10000, since the sandbox cannot bind them. It
 // returns the tunnels, each URL as OpenCode reaches it in the sandbox, and the /etc/hosts lines
@@ -392,16 +422,22 @@ func getSandboxEndpoints(urls []string) ([]sandboxEndpoint, map[string]string, [
 		}
 		listen := net.JoinHostPort(address, strconv.Itoa(local))
 		target := host
-		if host == "host.docker.internal" || host == "host.containers.internal" {
+		thisMachine := host == "host.docker.internal" || host == "host.containers.internal"
+		if thisMachine {
 			target = "127.0.0.1"
+		} else if ip != nil {
+			if err := checkEndpointAddress(ip, false); err != nil {
+				return nil, nil, nil, fmt.Errorf("%s: %w", raw, err)
+			}
 		}
 		target = net.JoinHostPort(target, strconv.Itoa(port))
 		if previous, taken := targets[listen]; !taken {
 			targets[listen] = target
 			endpoints = append(endpoints, sandboxEndpoint{
-				Listen: listen,
-				Socket: fmt.Sprintf("out-%d.sock", len(endpoints)),
-				target: target,
+				Listen:      listen,
+				Socket:      fmt.Sprintf("out-%d.sock", len(endpoints)),
+				target:      target,
+				thisMachine: thisMachine,
 			})
 		} else if previous != target {
 			return nil, nil, nil, fmt.Errorf("%s: its port collides with another endpoint of %s in the sandbox", raw, host)
