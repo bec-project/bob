@@ -23,7 +23,8 @@ to change. `runtime`, `image`, `home_volume` and `name` have no replacement; `sa
 the place of the home volume.
 
 - **Sandbox:** `sandbox.opencode` is the OpenCode executable; a bare name is looked up on the
-  PATH (default `opencode`). `sandbox.home` is the folder that keeps OpenCode's home,
+  PATH. By default bob-manager runs the OpenCode installed with it (`../libexec/opencode` beside
+  its own executable, as the RPM installs it), else `opencode` on the PATH. `sandbox.home` is the folder that keeps OpenCode's home,
   configuration and sessions; it defaults to `$XDG_DATA_HOME/bob/home` (or
   `~/.local/share/bob/home`), and a relative path resolves beside the config. Keep it on a local
   filesystem, not NFS: sessions live in SQLite. `sandbox.bind_address` is described under Access.
@@ -126,8 +127,9 @@ there fails; run bob in a Linux VM instead. The sandbox needs:
 
 - `bwrap` on bob-manager's PATH, from RHEL 9's BaseOS package `bubblewrap`;
 - unprivileged user namespaces, which RHEL 9 enables by default;
-- an OpenCode executable, a glibc build since it runs on the host's libraries. bob's packages do
-  not include OpenCode: install it and point `sandbox.opencode` at it.
+- an OpenCode executable, a glibc build since it runs on the host's libraries. The desktop app's
+  RPM installs a pinned OpenCode beside bob-manager; elsewhere, install it and point
+  `sandbox.opencode` at it.
 
 No image, container engine, kernel module, `NET_ADMIN` capability or root access is needed.
 

@@ -2,7 +2,8 @@
 # bob runs OpenCode on this machine in a bubblewrap sandbox (Linux, needs the bwrap command):
 # its own namespaces, /usr and /etc read-only, the workspace mounts below and its own home, and
 # no network but the provider and MCP URLs in this file.
-# The OpenCode executable; a bare name is looked up on PATH. Default: "opencode".
+# The OpenCode executable; a bare name is looked up on PATH. Default: the OpenCode installed with
+# bob-manager (../libexec/opencode beside it, as the RPM has it), else "opencode" on PATH.
 # opencode = "/opt/opencode/opencode"
 # The folder that keeps OpenCode's home, configuration and sessions, one per user.
 # Default: "$XDG_DATA_HOME/bob/home". Keep it off NFS: sessions live in SQLite.

@@ -39,8 +39,9 @@ in `settings.json`, in `~/.config/ch.psi.bob` on Linux and `~/Library/Applicatio
 Support/ch.psi.bob` on macOS: the same file as the Tauri desktop app, so both start bob
 the same way. Look and layout are kept with QSettings. The executable defaults to `$BOB_BIN`, then
 `bob-manager` beside the app, then (in a build from a checkout) the checkout's
-`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. bob-manager and OpenCode are
-installed separately, and bob itself runs on Linux only (see its
+`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. The RPM installs
+bob-manager and OpenCode with the app; elsewhere they are installed separately, and bob itself
+runs on Linux only (see its
 [runtime requirements](../../launcher/container_manager/README.md#runtime-requirements)).
 
 ## Build and run
@@ -143,7 +144,9 @@ Each bob release also carries this app, built by [`qt_desktop.yml`](../../.githu
 on the GitHub release and in Gitea (package `bob`, and the RPM in the `bec` RPM registry):
 
 - `bob-gui-<version>-1.el9.x86_64.rpm`: RHEL 9. RHEL 9 has no Qt 6.12 (EPEL 9 ships 6.10), so the
-  RPM carries Qt's official binaries in `/opt/bob-gui`, with `bob-gui` on the PATH. It needs only
+  RPM carries Qt's official binaries in `/opt/bob-gui`, with `bob-gui` on the PATH, and
+  bob-manager (also on the PATH) and the pinned OpenCode release (`/opt/bob-gui/libexec`, MIT
+  license in `/opt/bob-gui/licenses/opencode`), so nothing else is installed by hand. It needs only
   base RHEL 9 packages, `bubblewrap` and `container-selinux` among them for bob's sandbox.
 - `bob-gui_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with Qt inside the app. It is
   signed ad hoc, so macOS blocks its first start: allow it under System Settings → Privacy &

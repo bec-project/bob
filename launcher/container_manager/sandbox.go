@@ -68,14 +68,14 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if !sandboxSupported {
 		return connection, errors.New("bob's sandbox runs on Linux only; on macOS, run bob in a Linux VM")
 	}
-	openCode, err := exec.LookPath(options.OpenCode)
+	helper, err := os.Executable()
 	if err != nil {
-		return connection, fmt.Errorf("find OpenCode (sandbox.opencode): %w", err)
-	}
-	if openCode, err = filepath.Abs(openCode); err != nil {
 		return connection, err
 	}
-	helper, err := os.Executable()
+	if helper, err = filepath.EvalSymlinks(helper); err != nil {
+		return connection, err
+	}
+	openCode, err := findOpenCode(options.OpenCode, helper)
 	if err != nil {
 		return connection, err
 	}
@@ -291,6 +291,23 @@ func (s *sandboxProcess) stop(ctx context.Context) error {
 		}
 	}
 	return os.RemoveAll(s.runDir)
+}
+
+// findOpenCode is sandbox.opencode, looked up on PATH when it is a bare name, or else the OpenCode
+// installed with bob-manager (libexec beside its bin, as the RPM has it), or else opencode on PATH.
+func findOpenCode(configured, helper string) (string, error) {
+	if configured == "" {
+		bundled := filepath.Join(filepath.Dir(filepath.Dir(helper)), "libexec", "opencode")
+		if info, err := os.Stat(bundled); err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0 {
+			return bundled, nil
+		}
+		configured = "opencode"
+	}
+	openCode, err := exec.LookPath(configured)
+	if err != nil {
+		return "", fmt.Errorf("find OpenCode (sandbox.opencode): %w", err)
+	}
+	return filepath.Abs(openCode)
 }
 
 // sandboxRunBase is where run directories go: private to the user, and short, since socket

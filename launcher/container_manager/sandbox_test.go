@@ -186,3 +186,36 @@ func TestTunnelsCarryAConnectionBothWays(t *testing.T) {
 		t.Fatalf("reply %q", reply[:n])
 	}
 }
+
+func TestOpenCodeIsFoundBesideBobManager(t *testing.T) {
+	root := t.TempDir()
+	for _, directory := range []string{"bin", "libexec", "path"} {
+		if err := os.Mkdir(filepath.Join(root, directory), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	helper := filepath.Join(root, "bin", "bob-manager")
+	bundled := filepath.Join(root, "libexec", "opencode")
+	onPath := filepath.Join(root, "path", "opencode")
+	for _, executable := range []string{helper, onPath} {
+		if err := os.WriteFile(executable, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", filepath.Join(root, "path"))
+	if got, err := findOpenCode("", helper); err != nil || got != onPath {
+		t.Fatalf("without a bundled OpenCode: %q, %v", got, err)
+	}
+	if err := os.WriteFile(bundled, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := findOpenCode("", helper); err != nil || got != bundled {
+		t.Fatalf("with a bundled OpenCode: %q, %v", got, err)
+	}
+	if got, err := findOpenCode(onPath, helper); err != nil || got != onPath {
+		t.Fatalf("sandbox.opencode did not win: %q, %v", got, err)
+	}
+	if _, err := findOpenCode("missing-opencode", helper); err == nil {
+		t.Fatal("found a missing OpenCode")
+	}
+}

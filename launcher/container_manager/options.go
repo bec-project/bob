@@ -45,6 +45,7 @@ type Options struct {
 	// MCPServers maps OpenCode server names to their connection settings.
 	MCPServers map[string]MCPServer
 	// OpenCode is the OpenCode executable the sandbox runs; a bare name is looked up on PATH.
+	// Empty selects the OpenCode installed with bob-manager, else opencode on PATH.
 	OpenCode string
 	// Home is the folder that keeps OpenCode's home, configuration and sessions.
 	Home string
@@ -60,7 +61,6 @@ func DefaultOptions() Options {
 	return Options{
 		Model:       "Qwen3.8-27B",
 		BindAddress: "0.0.0.0",
-		OpenCode:    "opencode",
 		Home:        defaultSandboxHome(),
 	}
 }
@@ -165,9 +165,6 @@ type resolvedOptions struct {
 func getResolvedOptions(input Options) (resolvedOptions, error) {
 	if input.BindAddress == "" {
 		input.BindAddress = DefaultOptions().BindAddress
-	}
-	if input.OpenCode == "" {
-		input.OpenCode = DefaultOptions().OpenCode
 	}
 	if input.Home == "" {
 		input.Home = DefaultOptions().Home
