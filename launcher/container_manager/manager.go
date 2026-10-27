@@ -69,7 +69,7 @@ func (m *Manager) Start(parent context.Context, input Options) (connection Conne
 	if _, err := command(ctx, options.binary, nil, "image", "inspect", options.Image); err != nil {
 		return connection, fmt.Errorf("make the agent image available in the engine before launching: %w", err)
 	}
-	if _, err := command(ctx, options.binary, nil, "volume", "create", options.HomeVolume); err != nil {
+	if _, err := command(ctx, options.binary, nil, volumeCreateArgs(options.Runtime, options.HomeVolume)...); err != nil {
 		return connection, err
 	}
 	options.userConfig, err = getUserSettings(options)
@@ -147,6 +147,16 @@ func (m *Manager) Check(ctx context.Context) error {
 		return fmt.Errorf("%w: its container is not running", ErrStopped)
 	}
 	return nil
+}
+
+// volumeCreateArgs creates the home volume or keeps the existing one: Docker's volume create
+// succeeds for an existing volume, Podman's fails unless told to ignore it.
+func volumeCreateArgs(runtime, volume string) []string {
+	args := []string{"volume", "create"}
+	if runtime == "podman" {
+		args = append(args, "--ignore")
+	}
+	return append(args, volume)
 }
 
 func (m *Manager) createContainer(ctx context.Context, binary, launchID string, env []string, args ...string) error {

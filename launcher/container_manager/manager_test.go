@@ -431,3 +431,12 @@ esac
 		t.Errorf("Check with an exited host MCP server = %v", err)
 	}
 }
+
+func TestHomeVolumeIsReusedOnBothEngines(t *testing.T) {
+	if got := strings.Join(volumeCreateArgs("podman", "home"), " "); got != "volume create --ignore home" {
+		t.Fatalf("podman: %q", got)
+	}
+	if got := strings.Join(volumeCreateArgs("docker", "home"), " "); got != "volume create home" {
+		t.Fatalf("docker: %q", got)
+	}
+}
