@@ -19,6 +19,7 @@ type Manager struct {
 	createUncertain bool
 	home            *Manager
 	hostMCPs        []*hostMCPProcess
+	sandbox         *sandboxProcess
 }
 
 type Connection struct {
@@ -42,12 +43,15 @@ type MCPEndpoint struct {
 }
 
 func (m *Manager) Start(parent context.Context, input Options) (connection Connection, startErr error) {
-	if m.name != "" || m.launchID != "" || m.home != nil || len(m.hostMCPs) > 0 {
+	if m.name != "" || m.launchID != "" || m.home != nil || len(m.hostMCPs) > 0 || m.sandbox != nil {
 		return connection, errors.New("stop the current assistant before starting another")
 	}
 	options, err := getResolvedOptions(input)
 	if err != nil {
 		return connection, err
+	}
+	if options.Runtime == bubblewrapRuntime {
+		return m.startBubblewrap(parent, options)
 	}
 	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
 	defer cancel()
@@ -142,6 +146,9 @@ func (m *Manager) Check(ctx context.Context) error {
 	if err := m.hostMCPError(); err != nil {
 		return fmt.Errorf("%w: %v", ErrStopped, err)
 	}
+	if m.sandbox != nil {
+		return m.sandbox.check()
+	}
 	if m.name == "" {
 		return fmt.Errorf("%w: no container was started", ErrStopped)
 	}
@@ -216,6 +223,11 @@ func (m *Manager) prepareHome(ctx context.Context, options resolvedOptions) erro
 
 func (m *Manager) Stop(parent context.Context) (stopErr error) {
 	defer func() { stopErr = errors.Join(stopErr, m.stopHostMCPs(parent)) }()
+	if m.sandbox != nil {
+		err := m.sandbox.stop(parent)
+		m.sandbox = nil
+		return err
+	}
 	if m.home != nil {
 		if err := m.home.Stop(parent); err != nil {
 			return fmt.Errorf("home ownership cleanup: %w", err)

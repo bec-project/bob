@@ -128,6 +128,23 @@ clients may interpret `builtin` as a filename. Bootstrap requires active filteri
 NET_ADMIN in the container's own network namespace; unsupported setups fail closed.
 Docker is integration-tested; verify Podman and Linux identity mapping on deployment hosts.
 
+## bubblewrap runtime
+
+`runtime = "bubblewrap"` runs OpenCode on the host in a [bubblewrap](https://github.com/containers/bubblewrap)
+sandbox instead of a container: new user, mount, PID, IPC, UTS and network namespaces, `/usr` and
+`/etc` read-only, the workspace mounts at their own paths, and OpenCode's home from
+`container.home`. Nothing else of the host is visible, the user's home included. It needs the
+`bwrap` executable and unprivileged user namespaces; no image, engine or kernel module.
+
+The sandbox has no network. bob-manager carries the connections it needs through Unix sockets in
+a run directory both sides see: one tunnel per provider or MCP endpoint, which bob-manager dials on
+the host, and one back for clients, which reach OpenCode on `bind_address`. In the sandbox,
+bob-manager itself (`--sandbox-helper`) listens for each endpoint on a loopback address that
+`/etc/hosts` gives the endpoint's name, so TLS still checks the real certificate. The sandbox
+cannot bind ports below 1024, so those endpoints move up by 10000 inside: OpenCode reaches
+`https://ai.example/api` as `https://ai.example:10443/api`. MCP servers inside the sandbox
+(`mcp.*.port`) are not supported.
+
 ## Network policy
 
 Before agent code runs, bootstrap resolves provider/MCP endpoints, pins their addresses

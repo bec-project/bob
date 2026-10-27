@@ -1,0 +1,31 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "mcp": {},
+  "enabled_providers": [
+    "self-hosted"
+  ],
+  "model": "self-hosted/{env:LLM_MODEL_ID}",
+  "provider": {
+    "self-hosted": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "PSI-hosted LLM",
+      "options": {
+        "baseURL": "{env:LLM_BASE_URL}",
+        "apiKey": "{env:API_KEY}"
+      },
+      "models": {
+        "{env:LLM_MODEL_ID}": {
+          "name": "{env:LLM_MODEL_ID}",
+          "variants": {
+            "no-thinking": {
+              "chat_template_kwargs": {
+                "enable_thinking": false
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

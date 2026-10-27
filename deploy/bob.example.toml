@@ -1,6 +1,12 @@
 [container]
-# Container engine: "docker" or "podman". Default: "podman".
+# Container engine: "docker" or "podman", or "bubblewrap" (Linux) to run OpenCode in a bubblewrap
+# sandbox on the host, without an image or engine. Default: "podman".
 runtime = "docker"
+# bubblewrap only: the OpenCode executable (a bare name is looked up on PATH). Default: "opencode".
+# opencode = "/opt/bob-gui/libexec/opencode"
+# bubblewrap only: the folder that keeps OpenCode's home, configuration and sessions, in place of
+# home_volume. Default: "$XDG_DATA_HOME/bob/home". Keep it off NFS: sessions live in SQLite.
+# home = "/var/tmp/bob-home"
 # Image tag to launch; build this image from ./containers first.
 # Default: "localhost/bob".
 image = "localhost/bob"

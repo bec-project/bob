@@ -55,6 +55,12 @@ type Options struct {
 	OutputLimit int
 	// MCPServers maps OpenCode server names to their connection settings.
 	MCPServers map[string]MCPServer
+	// OpenCode is the OpenCode executable the bubblewrap runtime runs; a bare name is looked up
+	// on PATH.
+	OpenCode string
+	// Home is the folder the bubblewrap runtime gives OpenCode as its home, in place of
+	// HomeVolume.
+	Home string
 }
 
 // defaultOutputLimit caps the output limit derived from ContextLimit; OpenCode's model
@@ -70,6 +76,8 @@ func DefaultOptions() Options {
 		HomeVolume:  defaultHomeVolume(),
 		Model:       "Qwen3.8-27B",
 		BindAddress: "0.0.0.0",
+		OpenCode:    "opencode",
+		Home:        defaultSandboxHome(),
 	}
 }
 
@@ -221,6 +229,12 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 	}
 	if input.BindAddress == "" {
 		input.BindAddress = DefaultOptions().BindAddress
+	}
+	if input.OpenCode == "" {
+		input.OpenCode = DefaultOptions().OpenCode
+	}
+	if input.Home == "" {
+		input.Home = DefaultOptions().Home
 	}
 	if err := input.validate(); err != nil {
 		return resolvedOptions{}, err

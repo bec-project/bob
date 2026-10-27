@@ -14,12 +14,16 @@ import (
 )
 
 func getExecutable(engine string) (string, error) {
-	if engine != "docker" && engine != "podman" {
-		return "", errors.New("choose Docker or Podman")
+	if engine != "docker" && engine != "podman" && engine != bubblewrapRuntime {
+		return "", errors.New("choose Docker, Podman or bubblewrap")
 	}
-	path, err := exec.LookPath(engine)
+	name := engine
+	if engine == bubblewrapRuntime {
+		name = "bwrap"
+	}
+	path, err := exec.LookPath(name)
 	if err != nil {
-		return "", fmt.Errorf("find %s on PATH: %w", engine, err)
+		return "", fmt.Errorf("find %s on PATH: %w", name, err)
 	}
 	return path, nil
 }

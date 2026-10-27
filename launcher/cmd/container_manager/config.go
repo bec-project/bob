@@ -20,6 +20,8 @@ type config struct {
 		HomeVolume  string `toml:"home_volume"`
 		Name        string `toml:"name"`
 		BindAddress string `toml:"bind_address"`
+		OpenCode    string `toml:"opencode"`
+		Home        string `toml:"home"`
 	} `toml:"container"`
 	Workspace struct {
 		Workdir    string   `toml:"workdir"`
@@ -51,6 +53,8 @@ func loadConfig(path string) (containermanager.Options, error) {
 	settings.Container.Image = input.Image
 	settings.Container.HomeVolume = input.HomeVolume
 	settings.Container.BindAddress = input.BindAddress
+	settings.Container.OpenCode = input.OpenCode
+	settings.Container.Home = input.Home
 	settings.Provider.Model = input.Model
 	file, err := os.Open(path)
 	if err != nil {
@@ -77,6 +81,8 @@ func loadConfig(path string) (containermanager.Options, error) {
 		ContextLimit: settings.Provider.ContextLimit,
 		OutputLimit:  settings.Provider.OutputLimit,
 		BindAddress:  settings.Container.BindAddress,
+		OpenCode:     settings.Container.OpenCode,
+		Home:         settings.Container.Home,
 		APIKey:       os.Getenv("API_KEY"),
 	}
 	if len(settings.MCP) > 0 {
@@ -108,6 +114,9 @@ func loadConfig(path string) (containermanager.Options, error) {
 	// Resolve paths beside the config so it works from any launching directory.
 	if !filepath.IsAbs(input.Workdir) {
 		input.Workdir = filepath.Join(filepath.Dir(path), input.Workdir)
+	}
+	if input.Home != "" && !filepath.IsAbs(input.Home) {
+		input.Home = filepath.Join(filepath.Dir(path), input.Home)
 	}
 	for _, directories := range [][]string{input.ReadWrite, input.ReadOnly} {
 		for i, directory := range directories {
