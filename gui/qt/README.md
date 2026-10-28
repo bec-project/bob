@@ -18,8 +18,10 @@ starts: the first app a user opens starts their bob, and later ones join it.
   Downloads.
 - **Earlier prompts**: *Up* on the composer's first line steps back through the chat's prompts,
   *Down* forward again.
-- **MCP servers**: one chip per server in the header, coloured by its state; a server that is not
-  connected connects again when clicked.
+- **MCP servers**: one chip per server in the header, coloured by its state and with the version
+  the server reports; a server that is not connected connects again when clicked.
+- **Plugins**: views for the tools of the MCP servers bob.toml names, such as BEC's report cards,
+  panels and scan approvals (see [Plugins](#plugins)).
 
 The window talks to OpenCode directly over HTTP (REST with Basic auth and the `/event` stream).
 The C++ side holds the lease on bob: it runs `bob-manager --config bob.toml`, connects to the
@@ -69,15 +71,65 @@ the app with `run_qmlPreview`, given the app's executable
 claude mcp add qmlpreview ~/Qt/6.12.0/macos/bin/QmlPreviewMcpServer
 ```
 
+## Plugins
+
+A plugin adds views for the tools of one kind of MCP server. bob.toml enables it for a server:
+
+```toml
+[mcp.bec_mcp]
+url = "http://localhost:8000/mcp"
+plugin = "bec"
+```
+
+The app makes one instance of the plugin per server that names it, so two servers of the same
+kind get two instances, each with its own panels. An instance sees only its server: the tool
+calls and approvals of that server's tools, and MCP calls to that server alone. Settings →
+Plugins lists every instance, as "<plugin> · <server>", with a switch (on until you switch it
+off) and the plugin's own settings; a plugin name the app does not have is listed there too.
+Instances come from the chat's connection, so they stay while bob is lost; their calls reach only
+the MCP servers of the bob this app holds, and fail with "join bob first" otherwise. A bob
+connected by hand names no MCP servers, so it gets no plugins.
+
+The app also asks each MCP server of the bob it holds for its version (the `serverInfo` of MCP's
+`initialize`) whenever OpenCode reports it connected, and shows it on the chip and in Settings.
+
+The BEC plugin (`plugin = "bec"`) adds report cards for a BEC MCP server's results, panels for
+devices, log incidents and the queue, and readable scan approvals; see
+[its README](imports/Bob/Plugins/Bec/README.md).
+
+### Writing a plugin
+
+A plugin is a QML module `Bob.Plugins.<Name>` in `imports/Bob/Plugins/<Name>/`, built as a static
+library the app links, with one object (a `QtObject`) that describes it: `pluginId`, `name`,
+`description`, prompt `suggestions`, side `panels`, a `settings` component for its row in
+Settings, and `describeTool` and `describePermission`, which draw its server's tool calls (a
+label, a summary and a body under the row) and permission requests. A line in
+[`PluginRegistry.qml`](imports/Bob/PluginRegistry.qml)'s `known` registers it, and bob.toml names
+it by that id; the file's header lists the whole interface. Plugins only add views; the chat
+works without them.
+
+Its logic is C++ in its own folder, registered with `QML_ELEMENT` (the BEC plugin's `BecCards`
+and `BecServer`), and its QML only draws: the QML imports only Qt, the `Bob` module's controls and
+theme, `Desktop` from `Bob.Backend` (to open links), and the plugin's own types. A plugin keeps its
+docs, test data and Design Studio stand-ins for its C++ types in its folder, so adding or removing
+one touches only that folder, its line in `known`, and the build (`add_subdirectory` and the link
+in `imports/Bob/CMakeLists.txt`, `Q_IMPORT_QML_PLUGIN` in `src/main.cpp`, and its tests). Its
+context carries its server, an `McpServer` (`src/gui/plugins.h`): `callTool` and `listTools` from C++,
+or `call(tool, args, callback)` from QML, go through the app's C++ MCP client, which looks the
+server up in the connection of the bob this app holds, keeps one MCP session per server and calls
+only `http://` servers on loopback, never through a proxy. A call gives up after 2 minutes unless
+the caller allows more.
+
 ## Layout
 
 | Path | What it holds |
 | --- | --- |
-| `src/bob/` | Talking to bob, without QML (library `bobcore`): the lease on bob (`bobsession`), its settings, the OpenCode client and event stream, and the chat's sessions they keep current (`chatclient`) |
-| `src/gui/` | What the views read, QML module `Bob.Backend` on top of `bobcore`: the chat as the window shows it (`chat`), the models, preferences and desktop helpers |
+| `src/bob/` | Talking to bob, without QML (library `bobcore`): the lease on bob (`bobsession`), its settings, the OpenCode client and event stream, the chat's sessions they keep current (`chatclient`), and the MCP client the plugins call through (`mcpclient`) |
+| `src/gui/` | What the views read, QML module `Bob.Backend` on top of `bobcore`: the chat as the window shows it (`chat`), the models, preferences, desktop helpers and the plugins' MCP servers (`plugins`) |
 | `imports/Bob/` | The window, QML module `Bob`; `qmldir` lets Design Studio read it from the source tree |
+| `imports/Bob/Plugins/` | The plugins, one QML module each |
 | `designer/` | Design Studio's preview and stand-ins for `Bob.Backend` |
-| `tests/` | Unit tests (Qt Test) |
+| `tests/` | Unit tests (Qt Test), the BEC plugin's cards included |
 | `packaging/` | The RPM spec and the desktop entry |
 
 ## Checks

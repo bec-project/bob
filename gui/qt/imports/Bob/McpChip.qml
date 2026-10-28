@@ -3,12 +3,16 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Bob.Backend
 
-// An MCP server's name, coloured by its state; clicking one that is not connected connects it again.
+// An MCP server's name and version, coloured by its state; clicking one that is not connected
+// connects it again. The version is what the server itself reports (MCP's serverInfo), asked
+// again whenever it connects.
 AbstractButton {
     id: chip
 
     required property var server
     readonly property string tone: server.tone.split(" ")[0]
+    readonly property string version: Plugins.versions[server.name] ?? ""
+    readonly property string url: (Plugins.servers.find(entry => entry.name === server.name) ?? {}).url ?? ""
 
     enabled: server.retry
     hoverEnabled: true
@@ -20,7 +24,7 @@ AbstractButton {
         id: hover
     }
     ToolTip.visible: hover.hovered
-    ToolTip.text: server.detail
+    ToolTip.text: server.detail + (version ? "\n" + qsTr("Version %1").arg(version) : "") + (url ? "\n" + url : "")
     ToolTip.delay: 300
 
     background: Rectangle {
@@ -41,7 +45,7 @@ AbstractButton {
                 pulse: chip.server.tone.indexOf("pulse") >= 0
             }
             Text {
-                text: chip.server.name
+                text: chip.server.name + (chip.version ? " " + chip.version : "")
                 color: chip.tone === "error" || chip.tone === "warn" ? Theme.tone(chip.tone) : Theme.text2
                 font.pixelSize: 12
             }

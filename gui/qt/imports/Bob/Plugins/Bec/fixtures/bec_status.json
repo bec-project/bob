@@ -1,0 +1,145 @@
+{
+ "ok": true,
+ "summary": "BEC is healthy: all 4 core services are running (3 other services and 3 clients publish a status).",
+ "findings": [],
+ "data": {
+  "redis": {
+   "address": "localhost:6395",
+   "answered": true,
+   "round_trip_ms": 0.21,
+   "account": "default"
+  },
+  "core_services": [
+   {
+    "name": "DeviceServer",
+    "status": "RUNNING",
+    "host": "beamline-host",
+    "user": "e12345",
+    "bec_lib": "4.0.0",
+    "status_age_s": 1.8,
+    "cpu_percent": 0.4,
+    "memory_mb": 20.7,
+    "threads": 22,
+    "uptime_s": 102857.3
+   },
+   {
+    "name": "ScanServer",
+    "status": "RUNNING",
+    "host": "beamline-host",
+    "user": "e12345",
+    "bec_lib": "4.0.0",
+    "status_age_s": 3.0,
+    "cpu_percent": 0.4,
+    "memory_mb": 23.4,
+    "threads": 16,
+    "uptime_s": 102857.3
+   },
+   {
+    "name": "ScanBundler",
+    "status": "RUNNING",
+    "host": "beamline-host",
+    "user": "e12345",
+    "bec_lib": "4.0.0",
+    "status_age_s": 3.0,
+    "cpu_percent": 0.1,
+    "memory_mb": 19.5,
+    "threads": 10,
+    "uptime_s": 102857.3
+   },
+   {
+    "name": "FileWriterManager",
+    "status": "RUNNING",
+    "host": "beamline-host",
+    "user": "e12345",
+    "bec_lib": "4.0.0",
+    "status_age_s": 3.0,
+    "cpu_percent": 0.2,
+    "memory_mb": 20.0,
+    "threads": 6,
+    "uptime_s": 102857.3
+   }
+  ],
+  "other_services": [
+   {
+    "name": "BuiltinActors/9609a179",
+    "status": "RUNNING",
+    "host": "beamline-host",
+    "user": "e12345",
+    "bec_lib": "4.0.0",
+    "status_age_s": 3.0,
+    "cpu_percent": 0.4,
+    "memory_mb": 23.4,
+    "threads": 16,
+    "uptime_s": 102857.3
+   },
+   {
+    "name": "DAPServer/LmfitSer",
+    "status": "RUNNING",
+    "host": "beamline-host",
+    "user": "e12345",
+    "bec_lib": "4.0.0",
+    "status_age_s": 3.0,
+    "cpu_percent": 0.2,
+    "memory_mb": 21.1,
+    "threads": 6,
+    "uptime_s": 102857.2
+   },
+   {
+    "name": "SciHub",
+    "status": "RUNNING",
+    "host": "beamline-host",
+    "user": "e12345",
+    "bec_lib": "4.0.0",
+    "status_age_s": 3.0,
+    "cpu_percent": 0.2,
+    "memory_mb": 23.6,
+    "threads": 8,
+    "uptime_s": 102857.2
+   }
+  ],
+  "clients": {
+   "count": 3,
+   "by_type": {
+    "BECMCPClient": 1,
+    "BECWidgets": 1,
+    "pylsp-bec": 1
+   },
+   "listed": [
+    {
+     "name": "BECMCPClient/8ab5c1af",
+     "status": "RUNNING",
+     "host": "beamline-host",
+     "user": "e12345",
+     "bec_lib": "4.1.6",
+     "status_age_s": 0.0,
+     "this_server": true
+    },
+    {
+     "name": "BECWidgets/d01091bb",
+     "status": "RUNNING",
+     "host": "beamline-host",
+     "user": "e12345",
+     "bec_lib": "4.0.0",
+     "status_age_s": 3.0,
+     "cpu_percent": 0.8,
+     "memory_mb": 30.5,
+     "threads": 49,
+     "uptime_s": 123260.8
+    },
+    {
+     "name": "pylsp-bec/6708a676",
+     "status": "RUNNING",
+     "host": "beamline-host",
+     "user": "e12345",
+     "bec_lib": "4.0.0",
+     "status_age_s": 3.0,
+     "cpu_percent": 0.3,
+     "memory_mb": 20.0,
+     "threads": 8,
+     "uptime_s": 134954.5
+    }
+   ]
+  }
+ },
+ "truncated": false
+}

@@ -24,6 +24,10 @@ class Prefs : public QObject
     Q_PROPERTY(QString panel READ panel WRITE setPanel NOTIFY changed)
     // Widths set by dragging a splitter, by element ("sidebar", or a side panel's key)
     Q_PROPERTY(QVariantMap widths READ widths NOTIFY changed)
+    // Plugin instances, by MCP server name, switched off (false) or on; on when not listed
+    Q_PROPERTY(QVariantMap plugins READ plugins WRITE setPlugins NOTIFY changed)
+    // Each plugin instance's settings, by MCP server name
+    Q_PROPERTY(QVariantMap pluginSettings READ pluginSettings WRITE setPluginSettings NOTIFY changed)
 
 public:
     // Not default-constructible, so QML takes the app's instance from create().
@@ -45,6 +49,10 @@ public:
     QString panel() const;
     void setPanel(const QString &panel);
     QVariantMap widths() const;
+    QVariantMap plugins() const;
+    void setPlugins(const QVariantMap &plugins);
+    QVariantMap pluginSettings() const;
+    void setPluginSettings(const QVariantMap &settings);
 
     // Remembers a width; a negative one goes back to the default.
     Q_INVOKABLE void setWidth(const QString &key, int width);

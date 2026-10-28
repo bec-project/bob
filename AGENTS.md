@@ -82,7 +82,10 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
   - `launcher/sandbox/` — reusable Go package, named `sandbox` (bob's sandbox
     manager), and its tests
 - `gui/qt/` — the native desktop app (Qt 6.12, C++ and QML, CMake), which starts and holds bob and
-  chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`
+  chats with OpenCode; its C++ backend is in `src/`, its QML module in `imports/Bob/`. Plugins are
+  modules under `imports/Bob/Plugins/` with their logic in C++ and their views in QML that imports
+  only Qt, `Bob`, `Bob.Backend`'s `Desktop` and the plugin's own types; bob.toml enables one per MCP
+  server
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
@@ -124,7 +127,9 @@ If you change:
 - `gui/qt/`: build and run the unit tests (`cmake --build build/qt && (cd build/qt &&
   QT_QPA_PLATFORM=offscreen ctest --output-on-failure)`); keep `imports/Bob/qmldir` and the
   stand-ins in `designer/Bob/Backend` in step with the QML files and the C++ API, so Qt Design Studio
-  still opens `bob.qmlproject`. Use only Qt's public API.
+  still opens `bob.qmlproject`. Use only Qt's public API. The MCP client the plugins call through
+  (`src/bob/mcpclient.cpp`, `src/gui/plugins.cpp`) must keep calling only servers from the connection of
+  the bob the app holds, over `http://` on loopback.
 - `manager.go`, `host_mcp.go` or `runtime.go`: test startup failure, cancellation, a sandbox that
   exits before readiness, a host MCP server that exits, cleanup retries, and process-group
   cleanup. Run Go race tests.
