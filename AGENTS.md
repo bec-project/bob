@@ -1,59 +1,90 @@
 # Repository Guidelines — `bob`
 
-`bob` launches isolated OpenCode backends through Docker or Podman. Prefer focused changes,
-follow existing local patterns, and preserve lifecycle cleanup and the container's isolation policy.
+`bob` runs OpenCode backends on the host in a bubblewrap sandbox. Prefer focused changes,
+follow existing local patterns, and preserve lifecycle cleanup and the sandbox's isolation policy.
 
 This file is an agent-oriented operating manual. Human-facing documentation lives in
-[`README.md`](README.md), [`launcher/container_manager/README.md`](launcher/container_manager/README.md), and
-[`containers/README.md`](containers/README.md). Configuration examples live in `deploy/bob.example.toml`.
+[`README.md`](README.md) and [`launcher/sandbox/README.md`](launcher/sandbox/README.md).
+Configuration examples live in `deploy/bob.example.toml`.
 
 ## Core Rules
 
-- Keep container lifecycle and runtime arguments in `launcher/container_manager`; keep CLI concerns in
-  `launcher/cmd/container_manager`.
-- Calls to one `Manager` must be serialized. Preserve cleanup state until ownership and removal
-  are settled; an empty lookup does not settle an uncertain create request.
-- Track agent containers and preparation helpers by ownership labels. Never remove an unrelated
-  container by a configured name or perform broad engine cleanup.
-- Bootstrap must fail closed. Agent code must not run before active seccomp filtering, IPv4/IPv6
-  firewall setup, and permanent capability dropping are established.
-- Install firewall rules only inside the container's network namespace, never on the host.
-- Preserve mount protections, including read-only/writable overlap checks, symlink aliases,
-  system-directory aliases, the home volume, and the reserved `/tmp` destination.
-- Keep provider tokens out of command arguments and diagnostics. Connection JSON intentionally
-  contains the generated OpenCode server password; treat it as a credential.
+- Keep sandbox lifecycle, bubblewrap arguments and tunnels in `launcher/sandbox`, bob's
+  sandbox manager; keep CLI concerns in `launcher/cmd/bob-manager`.
+- Calls to one `Manager` must be serialized. Preserve cleanup state until every process bob
+  started has exited; a host MCP server that has not been reaped stays recorded for a retry and
+  blocks another start.
+- Stop only the process groups bob started: the sandbox's and those of its host MCP servers.
+  Never stop processes by name or perform broad cleanup.
+- The sandbox sees only what it is given. Keep srt's `denyRead: ["/"]` and re-allow nothing
+  beyond: OpenCode, bob-manager, `bash` and `socat`, the library folders, srt's `apply-seccomp`,
+  `/etc/pki`, `/etc/ssl` and `/etc/hosts`, the three persistent data/cache/state directories,
+  and the generated read-only policy tree. Never expose the whole sandbox.home or a workspace.
+- Use srt as its README describes: its settings file, its own seccomp filter (never
+  `allowAllUnixSockets`), its proxies with its `NO_PROXY`, on Node.js. Add nothing to its
+  bubblewrap.
+- OpenCode may use only MCP tools: keep `"*": "deny"` first in its permission rules, with
+  `"<server>_*": "allow"` per MCP server.
+- Keep OpenCode's executable configuration in the read-only generated policy directory, separate
+  from persistent sessions/cache. Disable project configuration and unapproved extensions;
+  verify effective configuration and agent permissions before returning a connection.
+- Require the packaged architecture's SRT helper and verify actual syscall restrictions before
+  OpenCode starts. Never accept a missing-helper fallback or a filter count alone.
+- Keep secrets out of bwrap arguments and diagnostics: the provider token and server password go
+  through the environment. Keep the sandbox's environment built from scratch; never pass
+  bob-manager's own environment through.
+- Keep the sandbox without a network of its own. It reaches only the configured provider and MCP
+  endpoints, through srt's proxies; the app's way in is the only connection into it. Never hand
+  the sandbox a TCP or UDP socket made outside: it belongs to the host's network and can be
+  reconnected anywhere the host reaches. The way in is a listening Unix socket.
+- Reject direct workspace settings. OpenCode's v2 location loader ignores the legacy project
+  configuration flags; keep its working directory in the generated read-only policy home.
+- Reject symlink aliases from data/cache/state into other host storage. Preserve stored messages
+  while replacing legacy session tool grants with the enforced MCP-only suffix.
+- Connection JSON intentionally contains the generated OpenCode server password; treat it as a
+  credential.
 - Follow existing patterns before introducing an abstraction. Keep diffs focused and preserve
   unrelated local changes.
-- Add regression tests for bug fixes, especially cancellation, lost acknowledgements, and cleanup.
+- Add regression tests for bug fixes, especially cancellation, a sandbox that exits early, and
+  cleanup.
 - Do not commit, push, open a PR, or post a review unless explicitly requested.
 
 ## First Read
 
 Read the affected implementation and its tests. For unfamiliar areas, start here:
 
-- `launcher/container_manager/options.go` — defaults, validation, mount resolution, and ownership identity
-- `launcher/container_manager/launch.go` — engine arguments, environment, and filesystem identity mapping
-- `launcher/container_manager/manager.go` — startup, helper lifecycle, cleanup, and readiness
-- `launcher/container_manager/runtime.go` — subprocess execution, cancellation, and failure classification
-- `launcher/cmd/container_manager/config.go` — TOML loading and relative paths
-- `launcher/cmd/container_manager/main.go` — arguments, signals, and the broker-or-locate entry point
-- `launcher/cmd/container_manager/broker.go` — the per-user broker that runs one Manager for all of a
+- `launcher/sandbox/options.go` — defaults, validation, rejected workspace settings, and the
+  launch's name and password
+- `launcher/sandbox/srt.go` — sandbox-runtime's settings, the allowed domains, the
+  environment, and startup
+- `launcher/sandbox/sandbox.go` — the sandbox process: check and stop, OpenCode lookup,
+  and OpenCode's configuration
+- `launcher/sandbox/tunnel.go` — the app's way in and the helper that serves it in the
+  sandbox (`bob-manager --sandbox-helper`)
+- `launcher/sandbox/manager.go` — the `Manager` API, connection JSON, and readiness
+- `launcher/sandbox/host_mcp.go` — host MCP servers: startup, readiness, and
+  process-group cleanup
+- `launcher/sandbox/runtime.go` — short helper commands with process-group cancellation
+- `launcher/sandbox/opencode.json` — OpenCode's base configuration, built into
+  bob-manager
+- `launcher/cmd/bob-manager/config.go` — TOML loading, removed settings, and relative paths
+- `launcher/cmd/bob-manager/main.go` — arguments, signals, the sandbox helper, and the
+  broker-or-locate entry point
+- `launcher/cmd/bob-manager/broker.go` — the per-user broker that runs one Manager for all of a
   user's clients, and the locate step that starts it
-- `containers/network.py` and `containers/entrypoint.sh` — firewall bootstrap and privilege dropping
-- `containers/Dockerfile` and `containers/opencode.json` — image and OpenCode configuration
-- `launcher/container_manager/lifecycle_test.go` — fake engine and cleanup regression tests
+- `launcher/sandbox/sandbox_test.go` and `manager_test.go` — bubblewrap arguments,
+  endpoints, tunnels, and the stand-in `bwrap` for startup and cleanup tests
 
 ## Repo Layout
 
 - `launcher/` — the Go module (`go.mod`); run Go commands from here
-  - `launcher/cmd/container_manager/` — Go executable and CLI/configuration tests
-  - `launcher/container_manager/` — reusable Go package, named `containermanager`, and its tests
-- `containers/` — what bob ships as containers: the image build context, Python firewall bootstrap,
-  shell entrypoint, and network tests
+  - `launcher/cmd/bob-manager/` — Go executable and CLI/configuration tests
+  - `launcher/sandbox/` — reusable Go package, named `sandbox` (bob's sandbox
+    manager), and its tests
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
-- `ci/` — release binary packaging
+- `ci/` — release binary packaging and its Python tests
 
 Treat `launcher/go.mod` as the source of truth for Go dependencies and the minimum Go version.
 Treat `ruff.toml` as the source of truth for Python linting and formatting settings.
@@ -68,22 +99,27 @@ guidance here. Keep it local and untracked; do not copy its contents into commit
 
 If you change:
 
-- `options.go` or `config.go`: test validation, defaults, token precedence, and relative paths;
-  update `deploy/bob.example.toml` and the configuration table when public settings change.
-- `launch.go`: check Docker and Podman argument generation, identities, security options, mount
-  flags, and helper commands. Preserve values without shell interpolation.
+- `options.go` or `config.go`: test validation, defaults, token precedence, relative paths, and
+  the error that names an unknown setting;
+  update `deploy/bob.example.toml` and the configuration section when public settings change.
+- `srt.go`: check the settings (deny-all reads with the listed exceptions, writes, allowed
+  domains with ports, `localhost` and `127.0.0.1` as `localhost4.localdomain4` plus the
+  `127.0.0.1` literal), the environment (srt's temporary folders in `sandbox.home`), and run a
+  real start on Linux: OpenCode must chat and reach its MCP server through srt's proxy, and run
+  under srt's filter (`Seccomp_filters` of OpenCode's process). `sandbox.go`: stop (process group,
+  SIGTERM then SIGKILL, run directory removed).
+- `tunnel.go`: test both directions and half-closes through an inherited listener.
+- `opencode.json`: keep the `self-hosted` provider name and the variables it reads in step with
+  `getOpenCodeEnvironment`.
 - `broker.go`: test leases (two clients, one start, none before the first client), teardown after
   the last client and the linger time, a killed client ending its lease, start failures reaching
-  every client, cancellation before Stop, the health watch (a stopped container ends every lease,
-  brief engine failures do not), a client's stop request and the reason every lease gets, and the
-  one-broker lock; run the broker tests repeatedly
+  every client, cancellation before Stop, the health watch (an exited sandbox ends every lease,
+  a few checks that cannot tell do not), a client's stop request and the reason every lease gets,
+  and the one-broker lock; run the broker tests repeatedly
   with `-race -count=5`. Keep clients in step with the protocol.
-- `manager.go` or `runtime.go`: test startup failure, cancellation, delayed creation, cleanup
-  retries, helper exit status, and lost removal acknowledgements. Run Go race tests.
-- `network.py`: run the network unit tests; check both address families, mapped IPv4 addresses,
-  DNS pinning, loopback handling, and failures before agent execution.
-- `entrypoint.sh`, `Dockerfile`, or `opencode.json`: rebuild the image before real-engine
-  validation. Check bootstrap identity, capability dropping, provider configuration, and MCP setup.
+- `manager.go`, `host_mcp.go` or `runtime.go`: test startup failure, cancellation, a sandbox that
+  exits before readiness, a host MCP server that exits, cleanup retries, and process-group
+  cleanup. Run Go race tests.
 - Documentation only: verify paths, commands, examples, and stated runtime limitations. A broad
   test run is unnecessary when executable behavior is unchanged.
 - CI or release tooling: run actionlint and the affected checks. Keep publishing in the trusted
@@ -91,39 +127,39 @@ If you change:
 
 ## Lifecycle And Isolation
 
-The launcher resolves configuration, checks the engine and local image, prepares the home volume,
-creates and starts the agent container, discovers published ports, and waits for authenticated
-health.
-Images must already exist in the selected engine; creation uses `--pull never`.
-
-Engine CLI termination does not necessarily cancel a daemon request. Record ownership before
-dispatch. Keep transport errors, proxy/server timeouts, and unknown responses uncertain. Only settle
-a rejection when evidence establishes that creation cannot complete; do not generalize from an
-error prefix alone. Preserve errors for callers through wrapping and `errors.Join`.
+The launcher resolves configuration, finds `bwrap` and OpenCode, starts host MCP servers, opens
+one tunnel per endpoint in a new run directory, starts bwrap in its own process group, and waits
+for OpenCode's authenticated health through the client listener. A sandbox that exits early ends
+the wait; a failed start stops everything it started.
 
 Cleanup uses a context independent of startup cancellation. Repeated interrupts must not interrupt
-cleanup. Successful stop clears state; unresolved cleanup retains enough state for a retry and
-blocks another start. Check preparation helpers' exit status and clean them up like agent
-containers.
+cleanup. Stop closes the tunnels, sends SIGTERM to the sandbox's process group and SIGKILL after
+10 seconds, waits for bwrap, and removes the run directory; the home folder stays. Host MCP
+servers are stopped by process group within 30 seconds; unresolved ones stay recorded for a retry.
+Preserve errors for callers through wrapping and `errors.Join`.
 
-Readiness requests must go directly to the published container endpoint, without environment proxies
-or redirects. Structured engine responses use stdout only; container diagnostics need both streams.
+Readiness requests must go directly to the client listener, without environment proxies or
+redirects. Startup errors include the sandbox's recent output, with the provider token redacted.
 
-The firewall allows configured server IPs and TCP ports, local TCP services, replies to incoming TCP
-connections, and IPv6 neighbour discovery. It does not enforce URL paths or distinguish domains on
-the same IP. Preserve the documented policy and isolation limits rather than promising stronger
-guarantees. Host-control sockets remain dangerous even through read-only mounts.
+The sandbox has no network. It reaches the configured endpoints by host and port through
+sandbox-runtime's proxies and does not enforce URL paths. The agent can call only MCP tools, runs
+as the user's UID, sees few host files (OpenCode, bash, socat, the library folders, the CA
+certificates and the hosts file), holds the provider token in its environment, and runs under
+srt's seccomp filter, which refuses Unix sockets, io_uring, new namespaces and mounting. There is
+no SELinux confinement. Preserve the documented policy and isolation limits
+rather than promising stronger guarantees. Host-control sockets remain dangerous even through
+read-only mounts.
 
 ## Validation
 
 Run the smallest relevant test target first. For lifecycle, shared configuration, or isolation
 changes, run the affected suites before finishing. Keep tests independent of execution order.
-Go commands run in `launcher/`; the firewall tests run from the repository root.
+Go commands run in `launcher/`; the release script tests run from the repository root.
 
 ```bash
-(cd launcher && go test -race ./container_manager -run TestCancelledCreate)
-(cd launcher && go test -race ./cmd/container_manager)
-python3 -m unittest discover -s containers -p network_test.py
+(cd launcher && go test -race ./sandbox -run TestSandbox)
+(cd launcher && go test -race ./cmd/bob-manager)
+python3 -m unittest discover -s ci -p '*_test.py'
 ```
 
 Full Go checks, in `launcher/`:
@@ -131,23 +167,17 @@ Full Go checks, in `launcher/`:
 ```bash
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
-go build -o ../build/bob-manager ./cmd/container_manager
+go build -o ../build/bob-manager ./cmd/bob-manager
 ```
 
-Unit tests should use temporary directories, fake engines, and synthetic endpoints. Reuse the
-existing lifecycle and signal helpers; model helper and agent containers separately. Do not rely on
-a real provider, production credentials, or hardware for tests.
+Unit tests should use temporary directories, the stand-in `bwrap`, and synthetic endpoints. Reuse
+the existing sandbox, broker, and signal helpers. Do not rely on a real provider, production
+credentials, or hardware for tests. The Ctrl-C broker test runs on Linux only.
 
-Real-engine integration requires Docker and a freshly built image:
-
-```bash
-docker build -t localhost/bob ./containers
-(cd launcher && BOB_CONTAINER_TEST=1 go test -race ./...)
-```
-
-Integration tests must clean up only their own containers and test volumes. Ordinary manager cleanup
-preserves the home volume. Report skipped integration tests and distinguish unit tests, simulated
-platform control flow, cross-compilation, and actual deployment checks.
+For isolation changes, run the opt-in real Linux suite in `ci/sandbox_linux_test.py` and the
+pinned executable policy regression; see the sandbox manager's README. Say so when the required
+Linux host or binaries are unavailable. Distinguish unit tests, simulated platform control flow,
+cross-compilation, and actual deployment checks.
 
 ## Style And Change Hygiene
 
@@ -155,49 +185,47 @@ platform control flow, cross-compilation, and actual deployment checks.
 - Use Python 3.11-compatible syntax, four-space indentation, and a 100-character line limit.
 - Prefer f-strings and `pathlib` in new Python code where appropriate.
 - Use argument arrays for subprocesses; do not build shell commands from configuration values.
-- Keep Python bootstrap dependencies in the standard library unless there is a concrete need.
+- Keep the release scripts' Python dependencies in the standard library unless there is a
+  concrete need.
 - Avoid formatting and import-order churn in untouched files.
 
 ```bash
-ruff format containers/network.py containers/network_test.py
-ruff check containers/network.py containers/network_test.py
+ruff format --config ruff.toml ci
+ruff check --config ruff.toml ci
 ```
 
 ## Development Environment
 
-Requires Go 1.25+, host Python 3.11+, and a current Docker or Podman engine for integration work.
-Unit tests normally need no running engine. Use an existing suitable environment; keep machine paths
-and environment activation instructions out of committed repository guidance.
+Requires Go 1.25+ and host Python 3.11+. Running bob needs Linux with `bwrap` on the PATH,
+unprivileged user namespaces, and an OpenCode executable; unit tests need none of these. Use an
+existing suitable environment; keep machine paths and environment activation instructions out of
+committed repository guidance.
 
 If the default Go cache is unavailable in a sandbox, set `GOCACHE` to a writable temporary
 directory for that command. Do not change global tooling configuration to run one task.
 
-For a local launch, build the image, copy `deploy/bob.example.toml` to the ignored `bob.toml`, and
-configure
-the workspace, engine, provider URL, and any token. `bob-manager --config bob.toml` makes sure your
-broker runs and prints its socket; bob starts when a client connects there (see
-`launcher/container_manager/README.md#how-bob-runs`):
+For a local launch, build bob-manager, copy `deploy/bob.example.toml` to the ignored `bob.toml`,
+and configure the provider URL, any token, and `sandbox.opencode` if OpenCode is not
+on the PATH. `bob-manager --config bob.toml` makes sure your broker runs and prints its socket;
+bob starts when a client connects there (see
+`launcher/sandbox/README.md#how-bob-runs`):
 
 ```bash
-go -C launcher build -o ../build/bob-manager ./cmd/container_manager
+go -C launcher build -o ../build/bob-manager ./cmd/bob-manager
 build/bob-manager --config bob.toml
 ```
 
-Keep the host launcher and other host-executed code outside the agent's writable workspace.
+Keep the host launcher and other host-executed code outside sandbox.home and all agent-writable storage.
 
 ## Platform Notes
 
-Keep host code portable across macOS and Linux. Subprocess cancellation uses POSIX process groups;
-Windows is unsupported by the current implementation.
+Keep host code portable across macOS and Linux: bob-manager and the broker run on both, while the
+sandbox runs on Linux only. Subprocess cancellation uses POSIX process groups; Windows is
+unsupported by the current implementation.
 
-Docker maps the host UID/GID on Linux and uses UID/GID 1000 on other hosts. Rootless Docker and
-daemon `userns-remap` are rejected. Podman uses `keep-id`; Linux supplementary groups require
-`crun`.
-Verify identity mapping on deployment hosts rather than inferring it from argument tests.
-
-On enforcing SELinux hosts, use pre-labeled mounts or explicitly select `workspace.mount_label`.
-Relabeling changes host files, including read-only sources; do not silently enable it for users.
-Do not share a home volume concurrently between launches using different filesystem identities.
+bubblewrap needs unprivileged user namespaces, which RHEL 9 enables by default. Verify the sandbox
+on deployment hosts rather than inferring it from argument tests. Keep `sandbox.home` off NFS:
+OpenCode keeps its sessions in SQLite.
 
 ## Commit And PR Notes
 
@@ -207,7 +235,8 @@ Do not share a home volume concurrently between launches using different filesys
 - Permission to commit or push does not authorize a breaking-change marker. If a change requires
   one, explain the compatibility impact and obtain explicit approval before committing it.
 - Lead descriptions with the concrete problem and resulting behavior.
-- Explain configuration/default changes, image rebuild requirements, and compatibility implications.
-- Give exact validation commands and results, including unavailable engines or platform checks.
+- Explain configuration/default changes and compatibility implications.
+- Give exact validation commands and results, including platform checks you could not run, such
+  as a real sandbox on Linux.
 - Return reviews in chat unless posting externally is explicitly requested; distinguish introduced,
   exposed, and pre-existing findings.
