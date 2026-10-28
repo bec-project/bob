@@ -98,4 +98,5 @@ ApplicationWindow {
         id: settings
         objectName: "settings"
     }
+    RestartDialog {}
 }

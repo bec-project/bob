@@ -26,7 +26,11 @@ The C++ side holds the lease on bob: it runs `bob-manager --config bob.toml`, co
 broker's socket, says hello and keeps the connection open while the app holds bob (see
 [how bob runs](../../launcher/sandbox/README.md#how-bob-runs)). Quitting or crashing
 ends the lease; bob stops 90 seconds after the last app that uses it is gone. When the broker ends
-the lease (bob stopped), a bar above the chat says so and offers to join again.
+the lease (bob's sandbox exited, its broker was stopped, or another app restarted it), a bar above
+the chat says why and offers to join again. When bob already runs with another bob.toml (another
+program started it, or it still lingers after this app left it), the app joins it and asks whether
+to restart bob with its own bob.toml. Restarting stops bob for every program that holds it, so the
+dialog says how many others use it; *Restart with …* in Settings offers the same later.
 
 The app keeps how it starts bob (the bob.toml, the executable, and whether to join when it opens)
 in `settings.json`, in `~/.config/ch.psi.bob` on Linux and `~/Library/Application

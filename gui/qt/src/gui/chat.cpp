@@ -496,6 +496,7 @@ void Chat::onBobStatus()
 
 void Chat::joinBob()
 {
+    dismissRestart();
     setPhase(QStringLiteral("starting"));
     m_awaitingJoin = true;
     m_bob->join();
@@ -519,10 +520,7 @@ void Chat::evaluateJoin()
         setPhase(QStringLiteral("setup"), QStringLiteral("bob's broker sent a connection without URL or password"));
         return;
     }
-    m_joinNotice = status.runningConfig != status.config
-        ? QStringLiteral("bob already runs with %1, started by another program; this app uses it instead of %2.")
-              .arg(status.runningConfig, status.config)
-        : QString();
+    m_offerRestart = status.runningConfig != status.config;
     connectTo(connection->toVariantMap());
 }
 
@@ -531,6 +529,23 @@ void Chat::leaveBob()
     m_awaitingJoin = false;
     m_bob->leave();
     disconnect();
+}
+
+void Chat::restartBob()
+{
+    disconnect();
+    setPhase(QStringLiteral("starting"));
+    m_bob->restart();
+    m_awaitingJoin = true;
+    evaluateJoin();
+}
+
+void Chat::dismissRestart()
+{
+    if (!m_restartOffer)
+        return;
+    m_restartOffer = false;
+    emit restartOfferChanged();
 }
 
 // ---------- the connection ----------
@@ -547,6 +562,7 @@ void Chat::resetViews()
 void Chat::disconnect()
 {
     m_client->close();
+    dismissRestart();
     resetViews();
     setPhase(QStringLiteral("setup"));
     touch(SessionList | Thread | Current | Usage | Requests | Todos | Changes);
@@ -573,10 +589,10 @@ void Chat::onOpened()
         m_client->loadExtras(m_currentId);
     }
     touch(SessionList | Thread | Current | Usage | Requests | Todos | Changes);
-    if (!m_joinNotice.isEmpty()) {
-        m_notice = {{QStringLiteral("text"), m_joinNotice}, {QStringLiteral("tone"), QStringLiteral("info")}};
-        m_joinNotice.clear();
-        emit noticeChanged();
+    if (m_offerRestart) {
+        m_offerRestart = false;
+        m_restartOffer = true;
+        emit restartOfferChanged();
     }
 }
 

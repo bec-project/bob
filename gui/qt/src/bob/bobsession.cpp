@@ -3,12 +3,15 @@
 #include "bobpaths.h"
 
 #include <QCoreApplication>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QLocalSocket>
 #include <QProcess>
 
 #include <memory>
+
+#include <sys/stat.h>
 
 namespace {
 
@@ -59,6 +62,7 @@ QVariantMap BobStatus::toVariant() const
         map.insert(QStringLiteral("name"), name);
         map.insert(QStringLiteral("config"), config);
         map.insert(QStringLiteral("runningConfig"), runningConfig);
+        map.insert(QStringLiteral("consumers"), consumers);
         break;
     case Lost:
         map.insert(QStringLiteral("reason"), reason);
@@ -73,7 +77,7 @@ bool BobStatus::operator==(const BobStatus &other) const
 {
     return state == other.state && error == other.error && config == other.config
         && connection == other.connection && name == other.name
-        && runningConfig == other.runningConfig && reason == other.reason;
+        && runningConfig == other.runningConfig && consumers == other.consumers && reason == other.reason;
 }
 
 BobSession::BobSession(QObject *parent)
@@ -89,6 +93,7 @@ BobSession::~BobSession()
 {
     dropProcess();
     dropLease();
+    dropStop();
 }
 
 void BobSession::setStatus(const BobStatus &status)
@@ -99,8 +104,29 @@ void BobSession::setStatus(const BobStatus &status)
 
 void BobSession::join(const QString &binary, const QString &config)
 {
-    if (m_status.state == BobStatus::Joined || m_status.state == BobStatus::Joining)
+    if (m_status.state == BobStatus::Joined) {
+        // holding bob already: keep it, but say which bob.toml was asked for, so a different one
+        // shows up as a mismatch the user can act on
+        if (m_status.config != config) {
+            BobStatus status = m_status;
+            status.config = config;
+            setStatus(status);
+        }
         return;
+    }
+    if (m_status.state == BobStatus::Joining)
+        return;
+    start(binary, config, QString());
+}
+
+void BobSession::restart(const QString &binary, const QString &config, const QString &reason)
+{
+    leave();
+    start(binary, config, reason.isEmpty() ? QStringLiteral("bob was restarted") : reason);
+}
+
+void BobSession::start(const QString &binary, const QString &config, const QString &stopReason)
+{
     const quint64 generation = ++m_generation;
     BobStatus joining;
     joining.state = BobStatus::Joining;
@@ -124,13 +150,22 @@ void BobSession::join(const QString &binary, const QString &config)
         fail(generation, QStringLiteral("%1 is not an executable").arg(binary));
         return;
     }
+    m_binary = binary;
+    m_stopReason = stopReason;
+    locate(generation);
+}
 
+// Runs `bob-manager --config <bob.toml>`, which makes sure the user's broker runs and prints its
+// socket.
+void BobSession::locate(quint64 generation)
+{
+    const QString binary = m_binary;
     // bob resolves relative paths beside its bob.toml
     auto *process = new QProcess(this);
     m_process = process;
     process->setProgram(binary);
-    process->setArguments({QStringLiteral("--config"), config});
-    process->setWorkingDirectory(configFile.absolutePath());
+    process->setArguments({QStringLiteral("--config"), m_status.config});
+    process->setWorkingDirectory(QFileInfo(m_status.config).absolutePath());
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("PATH"), BobPaths::enginePath());
     process->setProcessEnvironment(environment);
@@ -149,6 +184,7 @@ void BobSession::leave()
     m_helloTimer.stop();
     dropProcess();
     dropLease();
+    dropStop();
     if (m_status != BobStatus::idle())
         setStatus(BobStatus::idle());
 }
@@ -160,6 +196,7 @@ void BobSession::fail(quint64 generation, const QString &error)
     m_helloTimer.stop();
     dropProcess();
     dropLease();
+    dropStop();
     setStatus(BobStatus::idle(error));
 }
 
@@ -177,10 +214,25 @@ void BobSession::dropProcess()
     process->deleteLater();
 }
 
+void BobSession::dropStop()
+{
+    m_stopReason.clear();
+    m_stopWatch.stop();
+    m_stopWatch.disconnect(this);
+    if (!m_stopRequest)
+        return;
+    QLocalSocket *request = m_stopRequest;
+    m_stopRequest = nullptr;
+    request->disconnect(this);
+    request->abort();
+    request->deleteLater();
+}
+
 void BobSession::dropLease()
 {
     m_buffer.clear();
     m_greeted = false;
+    m_stoppedReason.clear();
     if (!m_lease)
         return;
     QLocalSocket *lease = m_lease;
@@ -210,7 +262,10 @@ void BobSession::located(quint64 generation)
         const QJsonObject object = QJsonDocument::fromJson(line.trimmed()).object();
         const QString socket = object.value(QStringLiteral("socket")).toString();
         if (!socket.isEmpty()) {
-            connectBroker(generation, socket);
+            if (m_stopReason.isEmpty())
+                connectBroker(generation, socket);
+            else
+                stopBroker(generation, socket);
             return;
         }
     }
@@ -262,8 +317,14 @@ void BobSession::leaseData(quint64 generation)
     while ((newline = m_buffer.indexOf('\n')) != -1) {
         const QByteArray line = m_buffer.left(newline);
         m_buffer.remove(0, newline + 1);
-        if (!m_greeted)
+        if (!m_greeted) {
             handleReply(generation, line);
+        } else {
+            // the broker says why it ends the lease before it does
+            const QString stopped = QJsonDocument::fromJson(line).object().value(QStringLiteral("stopped")).toString();
+            if (!stopped.isEmpty())
+                m_stoppedReason = stopped;
+        }
         if (generation != m_generation)
             return;
     }
@@ -278,7 +339,10 @@ void BobSession::handleReply(quint64 generation, const QByteArray &line)
         return;
     }
     const QJsonObject reply = document.object();
-    const QString error = reply.value(QStringLiteral("error")).toString();
+    // an error, or bob stopping (for everyone) while this client waited for it
+    QString error = reply.value(QStringLiteral("error")).toString();
+    if (error.isEmpty())
+        error = reply.value(QStringLiteral("stopped")).toString();
     if (!error.isEmpty()) {
         fail(generation, error);
         return;
@@ -295,6 +359,7 @@ void BobSession::handleReply(quint64 generation, const QByteArray &line)
     joined.name = joined.connection.value(QStringLiteral("name")).toString();
     joined.config = m_status.config;
     joined.runningConfig = reply.value(QStringLiteral("config")).toString(m_status.config);
+    joined.consumers = reply.value(QStringLiteral("consumers")).toInt(1);
     setStatus(joined);
 }
 
@@ -308,12 +373,67 @@ void BobSession::leaseEnded(quint64 generation, const QString &error)
         return;
     }
     const BobStatus joined = m_status;
+    const QString stopped = m_stoppedReason;
     dropLease();
     BobStatus lost;
     lost.state = BobStatus::Lost;
-    lost.reason = error.isEmpty() ? QStringLiteral("bob stopped: its broker ended this app's lease")
-                                  : QStringLiteral("lost the connection to bob's broker: %1").arg(error);
+    if (!stopped.isEmpty())
+        lost.reason = stopped;
+    else if (error.isEmpty())
+        lost.reason = QStringLiteral("bob stopped: its broker ended this app's lease");
+    else
+        lost.reason = QStringLiteral("lost the connection to bob's broker: %1").arg(error);
     lost.config = joined.config;
     lost.name = joined.name;
     setStatus(lost);
+}
+
+// Asks the user's broker to stop bob for every client and exit, waits until its socket is gone
+// (or replaced by a new broker's), then joins: bob-manager starts a broker with this bob.toml.
+void BobSession::stopBroker(quint64 generation, const QString &socket)
+{
+    const QString reason = m_stopReason;
+    m_stopReason.clear();
+    auto inode = [socket]() -> qint64 {
+        struct stat info;
+        return ::stat(QFile::encodeName(socket).constData(), &info) == 0 ? qint64(info.st_ino) : -1;
+    };
+    const qint64 before = inode();
+    auto *request = new QLocalSocket(this);
+    m_stopRequest = request;
+    m_stopWatch.setInterval(50);
+    connect(&m_stopWatch, &QTimer::timeout, this, [this, generation, inode, before] {
+        if (generation != m_generation)
+            return;
+        // the broker removes its socket as soon as it stops listening, before it removes bob
+        if (inode() != before) {
+            dropStop();
+            locate(generation);
+        } else if (m_stopWaited.elapsed() > m_stopTimeout) {
+            fail(generation, QStringLiteral("bob's broker did not stop"));
+        }
+    });
+    connect(request, &QLocalSocket::connected, this, [this, generation, request, reason] {
+        if (generation != m_generation)
+            return;
+        const QJsonObject stop{
+            {QStringLiteral("consumer"), QStringLiteral("bob-gui")},
+            {QStringLiteral("pid"), QCoreApplication::applicationPid()},
+            {QStringLiteral("stop"), true},
+            {QStringLiteral("reason"), reason},
+        };
+        request->write(QJsonDocument(stop).toJson(QJsonDocument::Compact) + '\n');
+        m_stopWaited.start();
+        m_stopWatch.start();
+    });
+    connect(request, &QLocalSocket::errorOccurred, this, [this, generation, request](QLocalSocket::LocalSocketError) {
+        if (generation != m_generation || m_stopWatch.isActive())
+            return;
+        // no broker answers: nothing runs, so start bob
+        request->disconnect(this);
+        request->deleteLater();
+        m_stopRequest = nullptr;
+        locate(generation);
+    });
+    request->connectToServer(socket);
 }

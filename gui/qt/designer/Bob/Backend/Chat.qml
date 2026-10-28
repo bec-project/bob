@@ -46,6 +46,7 @@ QtObject {
     property int changedFiles: 1
     property var notice: ({})
     property string lostReason: ""
+    property bool restartOffer: false
 
     property ListModel sessions: ListModel {
         property string query: ""
@@ -78,6 +79,8 @@ QtObject {
     function connectTo(connection) {}
     function joinBob() {}
     function leaveBob() {}
+    function restartBob() {}
+    function dismissRestart() { restartOffer = false }
     function disconnect() {}
     function selectSession(id) { currentId = id }
     function send(text, typed) {}
