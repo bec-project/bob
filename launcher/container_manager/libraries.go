@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // The sandbox does not see the host's /usr: of the system's files it gets only what the dynamic
@@ -14,8 +15,15 @@ import (
 // with the libraries those name.
 
 // libraryDirs are where the loader looks for a library without ld.so.cache, which the sandbox
-// does not have, in its order.
-var libraryDirs = []string{"/lib64", "/usr/lib64", "/lib", "/usr/lib"}
+// does not have, in its order: RHEL's, then Debian's and Ubuntu's multiarch folders.
+var libraryDirs = []string{
+	"/lib64", "/usr/lib64",
+	"/lib/" + multiarch[runtime.GOARCH], "/usr/lib/" + multiarch[runtime.GOARCH],
+	"/lib", "/usr/lib",
+}
+
+// multiarch names an architecture's library folder on Debian and Ubuntu.
+var multiarch = map[string]string{"amd64": "x86_64-linux-gnu", "arm64": "aarch64-linux-gnu"}
 
 // sharedLibrary is a file the loader needs: where it looks for it, and the host file it is.
 type sharedLibrary struct {
