@@ -1,42 +1,28 @@
-[container]
-# Container engine: "docker" or "podman". Default: "podman".
-runtime = "docker"
-# Image tag to launch; build this image from ./containers first.
-# Default: "localhost/bob".
-image = "localhost/bob"
-# Named volume that preserves OpenCode's home, configuration, and sessions.
-# Default: "bob-<user name>-home", one per user, so every GUI of a user sees the same sessions
-# and users of one engine never share them. Set it to keep an older volume, such as "bob-cli-home".
-# home_volume = "bob-cli-home"
-# Optional container name. Omit to generate a unique name for each launch.
-# name = "bob"
-# OpenCode API bind address. Default: "0.0.0.0" (reachable from other hosts).
-# Use "127.0.0.1" for host-only access. The API still requires its generated password.
-bind_address = "0.0.0.0"
+[sandbox]
+# bob runs OpenCode on this machine under Anthropic's sandbox-runtime (Linux, needs bwrap, socat
+# and Node.js 22.12+): little of the host readable, with private application data,
+# and no network but the provider and MCP hosts in this file, through sandbox-runtime's proxies.
+# sandbox-runtime's dist/cli.js. Default: the copy installed with bob-manager
+# (../lib/sandbox-runtime beside it, as the RPM has it).
+# runtime = "/path/to/node_modules/@anthropic-ai/sandbox-runtime/dist/cli.js"
+# The OpenCode executable, which must be release 1.18.35, the one the sandbox policy is tested
+# with; a bare name is looked up on PATH. Default: the OpenCode installed with bob-manager
+# (../libexec/opencode beside it, as the RPM has it), else "opencode" on PATH.
+# opencode = "/opt/opencode/opencode"
+# Private storage (mode 0700) for sessions, cache, state and generated policy, one per user.
+# Default: "$XDG_DATA_HOME/bob/home". Keep it off NFS: sessions live in SQLite.
+# home = "/var/tmp/bob-home"
+# Address the GUI reaches OpenCode on. Default: "127.0.0.1" (host-only access).
+# Set "0.0.0.0" explicitly for access from other hosts. The API requires its generated password.
+bind_address = "127.0.0.1"
 
-[workspace]
-# Required working directory, mounted writable at the same absolute path inside
-# the container. OpenCode starts here, independently of the additional mounts.
-workdir = "."
-# Additional writable directories. Default: [].
-# Example: rw = ["../output"].
-rw = []
-# Additional read-only directories. Default: [].
-# Example: ro = ["../notes", "/absolute/path/to/data"].
-ro = []
-# On SELinux hosts, explicitly opt into labeling workspace mounts:
-# mount_label = "shared"   # :z, allows multiple containers to use the directories.
-# mount_label = "private"  # :Z, grants access to this container only.
-# Omit for pre-labeled mounts. Relabeling changes host files; do not use it for
-# system directories or a whole home directory used by other confined services.
-# Relative paths resolve beside this file; "." means this config's directory.
-# Host and container mount paths are identical. Read-only directories must not
-# overlap workdir or any RW directory, including through symlinks.
+# Direct workspace mounts are unsupported. Use BEC MCP source tools for file access.
+# Do not add a [workspace] section: OpenCode must not discover executable project configuration.
 
 [provider]
-# Model provider's API URL, including its API path. Must be reachable from the container.
-# Required, with no default. The firewall allows this server's IPs and TCP port.
-# URL path restrictions must be enforced by the server.
+# Model provider's API URL, including its API path. Required, with no default.
+# The sandbox reaches this host and port only, through bob-manager; URL path restrictions must
+# be enforced by the server.
 # Replace this placeholder with your provider or gateway URL.
 base_url = "https://ai-provider.example.com/api/"
 # Model ID offered by the provider. Default: "Qwen3.8-27B".
@@ -55,26 +41,20 @@ model = "Qwen3.8-27B"
 # Name each MCP through its table key; add more tables for additional servers.
 # The name is used unchanged in OpenCode's mcp configuration.
 # [mcp.bec_mcp]
-# Optional remote HTTP MCP endpoint. Its server IPs and TCP port join the outbound allowlist.
-# HTTP(S) MCP connections do not need published container ports.
-# url = "http://mcp.example:8000/mcp"
-# Optional container TCP port for this server, published on host loopback.
-# Omit or use 0 to disable. Use 1024 to 65535, excluding OpenCode's port 4096.
-# Each server's published container port must be unique; a host port is allocated automatically.
-# This does not start a server; HTTP(S) connections do not require port publishing.
-# port = 19000
+# Required HTTP(S) MCP endpoint. The sandbox reaches this host and port only, through bob-manager.
+# localhost or 127.0.0.1 stands for this machine, so a server listening on 127.0.0.1 works.
+# url = "http://localhost:19000/mcp"
 # Optional GUI plugin that adds views for this server's tools, such as "bec". Each server names
 # at most one; the GUI makes one instance of it per server, which users can switch off there.
 # plugin = "bec"
 
 # To let bob start a host HTTP MCP server, keep url and add host_command below.
-# host_command executes OUTSIDE the container, without shell parsing.
+# host_command executes OUTSIDE the sandbox, without shell parsing.
 # It must stay in the foreground. Bob waits for its TCP port and stops its process group on exit.
-# The URL must use host.docker.internal (Docker) or host.containers.internal (Podman).
+# The URL must name this machine as localhost or 127.0.0.1. OpenCode reaches it as
+# localhost4.localdomain4, which RHEL's /etc/hosts maps to 127.0.0.1, so the server must accept
+# that Host header.
 # The command inherits bob's launch directory; use an installed server executable.
-# Native Linux requires a container-reachable listener as well as loopback for readiness.
-# For example, --host 0.0.0.0 listens on both; authenticate or restrict inbound host access.
-# Docker Desktop can forward to a loopback-only host listener.
-# host_command = ["/path/to/bec-mcp-server", "--transport", "streamable-http", "--port", "19000", "--allow-unauthenticated", "--allowed-hosts", "host.docker.internal:19000"]
-# Host MCP dependencies and service access belong on the host, not in the agent image.
-# This does not publish a container port or give the agent direct access to Redis.
+# host_command = ["/path/to/bec-mcp-server", "--transport", "streamable-http", "--port", "19000", "--allow-unauthenticated", "--allowed-hosts", "localhost4.localdomain4:19000"]
+# Host MCP dependencies and service access belong on the host, not in the sandbox.
+# This does not give the agent direct access to Redis.

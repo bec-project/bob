@@ -72,14 +72,11 @@ elif name == "curl":
             print("201", end="")
     else:
         shutil.copyfile(registry, args[args.index("--output") + 1])
-elif name == "docker":
-    assert args[:5] == ["buildx", "imagetools", "create", "--tag", "gitea.psi.ch/bec/bob:latest"]
-    (root / "latest_image").write_text(args[5])
 else:
     raise AssertionError(name)
 """
         )
-        for command in ("git", "gh", "curl", "docker"):
+        for command in ("git", "gh", "curl"):
             path = self.commands / command
             path.write_text(script)
             path.chmod(0o755)
@@ -182,47 +179,6 @@ else:
         result = self.run_delivery()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(list(self.registry.iterdir()), [])
-
-    def run_promotion(self, version="1.2.3"):
-        return subprocess.run(
-            ["bash", str(Path(__file__).with_name("promote_image.sh")), version],
-            env=self.env,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-    def test_old_release_retry_preserves_newer_latest(self):
-        self.env["TEST_STABLE_TAGS"] = "v1.2.3\nv1.2.4"
-        latest = self.root / "latest_image"
-        latest.write_text("gitea.psi.ch/bec/bob:1.2.4")
-        result = self.run_promotion()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(latest.read_text(), "gitea.psi.ch/bec/bob:1.2.4")
-
-    def test_newest_stable_release_is_promoted(self):
-        self.env["TEST_STABLE_TAGS"] = "v1.2.2\nv1.2.3\nv1.3.0-rc.1"
-        result = self.run_promotion()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "latest_image").read_text(), "gitea.psi.ch/bec/bob:1.2.3")
-
-    def test_latest_comparison_is_numeric(self):
-        self.env["TEST_STABLE_TAGS"] = "v1.2.9\nv1.2.10"
-        result = self.run_promotion("1.2.10")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "latest_image").read_text(), "gitea.psi.ch/bec/bob:1.2.10")
-
-    def test_release_listing_failure_does_not_promote(self):
-        self.env["TEST_RELEASE_API_FAIL"] = "1"
-        result = self.run_promotion()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((self.root / "latest_image").exists())
-
-    def test_unpublished_version_is_not_promoted(self):
-        self.env["TEST_STABLE_TAGS"] = "v1.2.2"
-        result = self.run_promotion()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((self.root / "latest_image").exists())
 
 
 if __name__ == "__main__":

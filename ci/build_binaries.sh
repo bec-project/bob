@@ -18,7 +18,7 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
   platform=${target%/*}
   architecture=${target#*/}
   CGO_ENABLED=0 GOOS="$platform" GOARCH="$architecture" \
-    go -C launcher build -trimpath -ldflags='-s -w' -o "$task_build/bob-manager" ./cmd/container_manager
+    go -C launcher build -trimpath -ldflags='-s -w' -o "$task_build/bob-manager" ./cmd/bob-manager
   tar -C "$task_build" -czf "$destination/bob-manager_${version}_${platform}_${architecture}.tar.gz" bob-manager
 done
 
