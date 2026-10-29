@@ -86,7 +86,13 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err := validateHostMCPStorage(options); err != nil {
 		return connection, err
 	}
+	// srt makes its proxy's Unix sockets in its temporary folder. Node.js cuts a path too long for
+	// a socket short without an error, and srt then fails with an unrelated "address in use".
 	temporary := filepath.Join(options.Home, ".cache", "tmp")
+	if longest := filepath.Join(temporary, srtLongestSocket); len(longest) > maxSocketPath {
+		return connection, fmt.Errorf("sandbox.home is too long for sandbox-runtime's sockets in %s (%d bytes with their names, at most %d); set sandbox.home to a shorter directory",
+			temporary, len(longest), maxSocketPath)
+	}
 	if err := os.MkdirAll(temporary, 0o700); err != nil {
 		return connection, fmt.Errorf("create bob's home folder: %w", err)
 	}
