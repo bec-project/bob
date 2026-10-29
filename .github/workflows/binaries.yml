@@ -19,5 +19,5 @@ jobs:
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" \
-              go build -o /dev/null ./cmd/container_manager
+              go build -o /dev/null ./cmd/bob-manager
           done
