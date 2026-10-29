@@ -27,7 +27,9 @@ bob-manager rejects any setting it does not know and names it.
   sandbox-runtime's `dist/cli.js`, by default the copy installed with bob-manager. `sandbox.home`
   is the private storage root for sessions, cache, state and generated policy; it defaults to `$XDG_DATA_HOME/bob/home` (or
   `~/.local/share/bob/home`), and a relative path resolves beside the config. Keep it on a local
-  filesystem with mode 0700, not NFS: sessions live in SQLite. `sandbox.bind_address` is described under Access.
+  filesystem with mode 0700, not NFS: sessions live in SQLite. Its path may be at most 61 bytes long,
+  since sandbox-runtime makes Unix sockets in `.cache/tmp` under it; bob-manager refuses a longer one.
+  `sandbox.bind_address` is described under Access.
 - **Source access:** direct workspace mounts are unsupported. Remove `[workspace]` from old
   configurations and provide code through the configured BEC MCP source tools. OpenCode's newer
   location loader can execute project plugins even when legacy project-config flags are disabled;

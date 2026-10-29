@@ -64,12 +64,27 @@ exit 3
 	options := DefaultOptions()
 	options.OpenCode = openCode
 	options.SandboxRuntime = srt
-	options.Home = filepath.Join(root, "home")
+	options.Home = filepath.Join(shortTempDir(t), "home")
 	if _, err := prepareSandboxData(options.Home); err != nil {
 		t.Fatal(err)
 	}
 	options.BaseURL = "https://model.example/agent/"
 	return options, root
+}
+
+// shortTempDir is a folder in /tmp: a home in t.TempDir, or in macOS's TMPDIR, can be too long
+// for srt's sockets in its temporary folder.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	directory, err := os.MkdirTemp("/tmp", "bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	if directory, err = filepath.EvalSymlinks(directory); err != nil {
+		t.Fatal(err)
+	}
+	return directory
 }
 
 func staticELF() []byte {
@@ -232,6 +247,29 @@ func TestOpenCodeEnvironment(t *testing.T) {
 				t.Fatal("a host MCP command reached OpenCode's configuration")
 			}
 		})
+	}
+}
+
+func TestStartRefusesAHomeTooLongForSRTsSockets(t *testing.T) {
+	options, root := fakeSandbox(t)
+	short := shortTempDir(t)
+	room := maxSocketPath - len(short) - len("/") - len("/.cache/tmp/") - len(srtLongestSocket)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	options.Home = filepath.Join(short, strings.Repeat("h", room))
+	if _, err := (&Manager{}).Start(ctx, options); err == nil || strings.Contains(err.Error(), "sandbox.home is too long") {
+		t.Fatalf("a home at the limit: Start = %v", err)
+	}
+	if err := os.Remove(filepath.Join(root, "args")); err != nil {
+		t.Fatalf("a home at the limit did not reach srt: %v", err)
+	}
+	options.Home = filepath.Join(short, strings.Repeat("h", room+1))
+	_, err := (&Manager{}).Start(ctx, options)
+	if err == nil || !strings.Contains(err.Error(), "sandbox.home is too long for sandbox-runtime's sockets") {
+		t.Fatalf("a home one byte over the limit: Start = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "args")); !os.IsNotExist(err) {
+		t.Fatal("a home over the limit started srt")
 	}
 }
 

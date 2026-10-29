@@ -85,6 +85,10 @@ const sandboxServerSocket = "server.sock"
 // maxSocketPath is the longest path Linux takes for a Unix socket.
 const maxSocketPath = 107
 
+// srtLongestSocket is as long as the longest name sandbox-runtime 0.0.81 gives a socket in its
+// temporary folder: its network bridge's claude-socks-<16 hex digits>.sock.
+const srtLongestSocket = "claude-socks-0123456789abcdef.sock"
+
 // RunSandboxHelper runs in the sandbox, in place of OpenCode: it serves the app's way in, the
 // listening Unix socket it gets as standard input, then runs command, OpenCode, and exits with it.
 func RunSandboxHelper(command []string) error {
