@@ -45,6 +45,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
+      # bob-manager is built into the DMG
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: launcher/go.mod
+          cache: false
       - name: Build the DMG (runs the unit tests)
         env:
           VERSION: ${{ inputs.version }}

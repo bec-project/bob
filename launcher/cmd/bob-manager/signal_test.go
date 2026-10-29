@@ -40,7 +40,7 @@ func waitForFile(t *testing.T, path string) {
 
 func TestCtrlCDuringStartupAndCleanup(t *testing.T) {
 	if runtime.GOOS != "linux" {
-		t.Skip("bob's sandbox runs on Linux only")
+		t.Skip("the Ctrl-C test runs on Linux only")
 	}
 	directory := t.TempDir()
 	// A stand-in Node.js (which runs sandbox-runtime) that never becomes ready, notes the stop it

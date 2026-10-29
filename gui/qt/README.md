@@ -39,10 +39,9 @@ in `settings.json`, in `~/.config/ch.psi.bob` on Linux and `~/Library/Applicatio
 Support/ch.psi.bob` on macOS: the same file as the Tauri desktop app, so both start bob
 the same way. Look and layout are kept with QSettings. The executable defaults to `$BOB_BIN`, then
 `bob-manager` beside the app, then (in a build from a checkout) the checkout's
-`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. The RPM installs
-bob-manager and OpenCode with the app; elsewhere they are installed separately, and bob itself
-runs on Linux only (see its
-[runtime requirements](../../launcher/sandbox/README.md#runtime-requirements)).
+`build/bob-manager` or `bob`, then `bob-manager` or `bob` on the PATH. The RPM and the DMG
+install bob-manager and OpenCode with the app; elsewhere they are installed separately (see the
+sandbox's [runtime requirements](../../launcher/sandbox/README.md#runtime-requirements)).
 
 ## Build and run
 
@@ -149,6 +148,9 @@ on the GitHub release and in Gitea (package `bob`, and the RPM in the `bec` RPM 
   license in `/opt/bob-gui/licenses/opencode`), so nothing else is installed by hand. It needs only
   RHEL 9 packages, `bubblewrap`, `socat` and Node.js 22 (`dnf module enable nodejs:22` first)
   among them for bob's sandbox, and carries sandbox-runtime and ripgrep too.
-- `bob-gui_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with Qt inside the app. It is
-  signed ad hoc, so macOS blocks its first start: allow it under System Settings → Privacy &
-  Security, or run `xattr -dr com.apple.quarantine /Applications/bob-gui.app`.
+- `bob-gui_<version>_darwin_arm64.dmg`: macOS on Apple silicon, with Qt, bob-manager, OpenCode,
+  Node.js, ripgrep and sandbox-runtime inside the app, for development: bob's sandbox is weaker on
+  macOS than on Linux (see the sandbox's
+  [runtime requirements](../../launcher/sandbox/README.md#runtime-requirements)). It is signed ad
+  hoc, so macOS blocks its first start: allow it under System Settings → Privacy & Security, or
+  run `xattr -dr com.apple.quarantine /Applications/bob-gui.app`.
