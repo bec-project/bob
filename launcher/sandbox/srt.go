@@ -44,6 +44,8 @@ type srtSettings struct {
 		AllowedDomains  []string `json:"allowedDomains"`
 		DeniedDomains   []string `json:"deniedDomains"`
 		StrictAllowlist bool     `json:"strictAllowlist"`
+		// AllowLocalBinding lets the sandbox bind and reach loopback ports; macOS only.
+		AllowLocalBinding bool `json:"allowLocalBinding,omitempty"`
 	} `json:"network"`
 	Filesystem struct {
 		DenyRead   []string `json:"denyRead"`
@@ -51,20 +53,35 @@ type srtSettings struct {
 		AllowWrite []string `json:"allowWrite"`
 		DenyWrite  []string `json:"denyWrite"`
 	} `json:"filesystem"`
-	BwrapPath string `json:"bwrapPath"`
-	SocatPath string `json:"socatPath"`
-	Seccomp   struct {
-		ApplyPath string `json:"applyPath"`
-	} `json:"seccomp"`
-	Ripgrep struct {
+	BwrapPath string      `json:"bwrapPath,omitempty"`
+	SocatPath string      `json:"socatPath,omitempty"`
+	Seccomp   *srtSeccomp `json:"seccomp,omitempty"`
+	Ripgrep   struct {
 		Command string `json:"command"`
 	} `json:"ripgrep"`
+}
+
+// srtSeccomp names srt's seccomp helper (Linux only).
+type srtSeccomp struct {
+	ApplyPath string `json:"applyPath"`
+}
+
+// sandboxPath is the sandbox's PATH: the folders of the programs srt runs in it, then the
+// system's.
+func sandboxPath(tools sandboxTools) string {
+	var folders []string
+	for _, program := range []string{tools.bash, tools.socat} {
+		if program != "" {
+			folders = append(folders, filepath.Dir(program))
+		}
+	}
+	return strings.Join(append(folders, "/usr/bin", "/bin"), ":")
 }
 
 // startSandbox starts OpenCode under srt and waits until it answers.
 func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) (connection Connection, startErr error) {
 	if !sandboxSupported {
-		return connection, errors.New("bob's sandbox runs on Linux only; on macOS, run bob in a Linux VM")
+		return connection, errors.New("bob's sandbox runs on Linux and macOS only")
 	}
 	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
 	defer cancel()
@@ -141,10 +158,8 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	settings.Filesystem.AllowRead = getSRTReadable(options, helper, openCode, tools, policy.directory)
 	settings.Filesystem.AllowWrite = sandboxDataPaths(options.Home)
 	settings.Filesystem.DenyWrite = []string{policy.directory}
-	settings.BwrapPath = tools.bwrap
-	settings.SocatPath = tools.socat
-	settings.Seccomp.ApplyPath = tools.applySeccomp
 	settings.Ripgrep.Command = tools.ripgrep
+	applyPlatformSettings(&settings, tools)
 	settingsPath := filepath.Join(runDir, "srt-settings.json")
 	encoded, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
@@ -158,40 +173,21 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 		return connection, err
 	}
 
-	// The app's way in: a TCP listener on bind_address, forwarded to a Unix socket in the run
-	// directory that the helper in the sandbox accepts on and gets as standard input. Only that
-	// Unix socket goes in. A TCP socket made here belongs to the host's network: code in the
-	// sandbox that got hold of it could disconnect it and connect it anywhere the host reaches,
-	// past srt's proxy. A listening Unix socket cannot be connected anywhere, and srt's filter
-	// refuses new ones.
-	wayInPath := filepath.Join(runDir, sandboxServerSocket)
-	if len(wayInPath) > maxSocketPath {
-		return connection, fmt.Errorf("%s is too long for a Unix socket (%d bytes, at most %d); set XDG_RUNTIME_DIR to a shorter directory",
-			wayInPath, len(wayInPath), maxSocketPath)
-	}
-	inner, err := net.Listen("unix", wayInPath)
+	stdin, listener, port, err := openWayIn(runDir, options.BindAddress)
 	if err != nil {
 		return connection, err
 	}
-	inner.(*net.UnixListener).SetUnlinkOnClose(false)
-	wayIn, err := inner.(*net.UnixListener).File()
-	inner.Close()
-	if err != nil {
-		return connection, err
-	}
-	defer wayIn.Close()
-	listener, err := net.Listen("tcp", net.JoinHostPort(options.BindAddress, "0"))
-	if err != nil {
-		return connection, err
+	if stdin != nil {
+		defer stdin.Close()
 	}
 	sandbox.listeners = append(sandbox.listeners, listener)
-	go serveTunnel(listener, dialUnix(wayInPath))
-	host, port, _ := net.SplitHostPort(sandboxServer)
 	sandbox.cmd = exec.Command(tools.node, tools.srt, "--settings", settingsPath, "--",
-		helper, "--sandbox-helper", openCode, "serve", "--hostname", host, "--port", port)
+		helper, "--sandbox-helper", openCode, "serve", "--hostname", "127.0.0.1", "--port", port)
 	sandbox.cmd.Dir = policy.home
 	sandbox.cmd.Env = env
-	sandbox.cmd.Stdin = wayIn
+	if stdin != nil {
+		sandbox.cmd.Stdin = stdin
+	}
 	sandbox.cmd.Stdout = io.MultiWriter(os.Stderr, sandbox.output)
 	sandbox.cmd.Stderr = sandbox.cmd.Stdout
 	sandbox.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -216,16 +212,21 @@ type sandboxTools struct {
 	applySeccomp string
 }
 
-// findSandboxTools finds Node.js, srt (sandbox.runtime, else the copy installed with bob-manager
-// in lib/sandbox-runtime/node_modules), bwrap, socat and bash, which srt runs its bridges with,
-// and ripgrep, which srt scans the writable folders with (installed with bob-manager in libexec,
-// else on PATH).
+// findSandboxTools finds Node.js (installed with bob-manager in libexec, else on PATH), srt
+// (sandbox.runtime, else the copy installed with bob-manager in lib/sandbox-runtime/node_modules),
+// bash, which srt runs the command with, ripgrep, which srt scans the writable folders with
+// (installed with bob-manager in libexec, else on PATH), and what srt needs on this platform
+// beside them (findPlatformTools).
 func findSandboxTools(ctx context.Context, options resolvedOptions, helper string) (sandboxTools, error) {
 	var tools sandboxTools
 	prefix := filepath.Dir(filepath.Dir(helper))
 	var err error
-	if tools.node, err = exec.LookPath("node"); err != nil {
-		return tools, fmt.Errorf("find Node.js (node) on PATH, which sandbox-runtime runs on; install Node.js 22.12 or later: %w", err)
+	// The macOS app carries its own Node.js; RHEL has it as a system package.
+	tools.node = filepath.Join(prefix, "libexec", "node")
+	if _, err := os.Stat(tools.node); err != nil {
+		if tools.node, err = exec.LookPath("node"); err != nil {
+			return tools, fmt.Errorf("find Node.js (node) on PATH, which sandbox-runtime runs on; install Node.js 22.12 or later: %w", err)
+		}
 	}
 	tools.srt = options.SandboxRuntime
 	if tools.srt == "" {
@@ -234,12 +235,9 @@ func findSandboxTools(ctx context.Context, options resolvedOptions, helper strin
 	if _, err := os.Stat(tools.srt); err != nil {
 		return tools, fmt.Errorf("find sandbox-runtime (sandbox.runtime): %w", err)
 	}
-	if tools.applySeccomp, err = validateSRTSeccompHelper(tools.srt); err != nil {
-		return tools, err
-	}
 	tools.bwrap = options.binary
-	if tools.socat, err = exec.LookPath("socat"); err != nil {
-		return tools, fmt.Errorf("find socat on PATH; install socat: %w", err)
+	if err := findPlatformTools(&tools); err != nil {
+		return tools, err
 	}
 	if tools.bash, err = exec.LookPath("bash"); err != nil {
 		return tools, err
@@ -254,6 +252,9 @@ func findSandboxTools(ctx context.Context, options resolvedOptions, helper strin
 		return tools, err
 	}
 	for _, tool := range []*string{&tools.node, &tools.socat, &tools.bash, &tools.ripgrep} {
+		if *tool == "" {
+			continue
+		}
 		if *tool, err = filepath.EvalSymlinks(*tool); err != nil {
 			return tools, err
 		}
@@ -265,14 +266,16 @@ func findSandboxTools(ctx context.Context, options resolvedOptions, helper strin
 }
 
 // getSRTReadable lists what the sandbox may read: the programs it runs (bob-manager, OpenCode,
-// and bash and socat for srt's bridges), the system's library folders (srt binds the paths it is
-// given after resolving their symlinks, so the loader's names for single libraries would be
-// missing), srt's seccomp helper, the certificate authorities, the hosts file (srt's bridges are
-// reached as "localhost"), persistent data/cache/state, and the read-only OpenCode policy.
+// and bash and, on Linux, socat for srt's bridges), the system paths this platform needs
+// (platformReadable), persistent data/cache/state, and the read-only OpenCode policy.
 func getSRTReadable(options resolvedOptions, helper, openCode string, tools sandboxTools, policyDirectory string) []string {
-	readable := []string{helper, openCode, tools.bash, tools.socat}
-	srtPackage := filepath.Dir(filepath.Dir(tools.srt))
-	for _, path := range []string{"/usr/lib64", "/usr/lib", filepath.Join(srtPackage, "vendor", "seccomp"), "/etc/pki", "/etc/ssl", "/etc/hosts"} {
+	var readable []string
+	for _, program := range []string{helper, openCode, tools.bash, tools.socat} {
+		if program != "" {
+			readable = append(readable, program)
+		}
+	}
+	for _, path := range platformReadable(tools) {
 		if _, err := os.Stat(path); err == nil {
 			readable = append(readable, path)
 		}
@@ -283,9 +286,8 @@ func getSRTReadable(options resolvedOptions, helper, openCode string, tools sand
 }
 
 // getSRTEndpoints lists the domains srt's proxies let through, with their ports, and each URL as
-// OpenCode reaches it. localhost and 127.0.0.1 mean this machine: OpenCode reaches it as
-// hostLoopbackName, and the proxy dials it on 127.0.0.1, which srt allows only as an explicit
-// literal.
+// OpenCode reaches it. localhost and 127.0.0.1 mean this machine, which OpenCode reaches as
+// thisMachineEndpoint says for this platform.
 func getSRTEndpoints(urls []string) ([]string, map[string]string, error) {
 	var allowed []string
 	inside := map[string]string{}
@@ -310,12 +312,12 @@ func getSRTEndpoints(urls []string) ([]string, map[string]string, error) {
 			}
 		}
 		if isThisMachine(host) {
-			if err := checkHostLoopbackName(); err != nil {
+			var extra []string
+			if host, extra, err = thisMachineEndpoint(port); err != nil {
 				return nil, nil, err
 			}
-			host = hostLoopbackName
 			endpoint.Host = net.JoinHostPort(host, port)
-			allowed = append(allowed, "127.0.0.1:"+port)
+			allowed = append(allowed, extra...)
 		}
 		entry := host + ":" + port
 		if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
@@ -373,7 +375,7 @@ func getSRTEnvironment(options resolvedOptions, inside map[string]string, policy
 		lang = "C.UTF-8"
 	}
 	env := []string{
-		"PATH=" + filepath.Dir(tools.bash) + ":" + filepath.Dir(tools.socat) + ":/usr/bin:/bin",
+		"PATH=" + sandboxPath(tools),
 		"USER=" + name, "LANG=" + lang,
 		"TMPDIR=" + temporary, "CLAUDE_CODE_TMPDIR=" + temporary,
 		"XDG_RUNTIME_DIR=" + os.Getenv("XDG_RUNTIME_DIR"),

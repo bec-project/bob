@@ -79,14 +79,18 @@ func dialUnix(path string) func(context.Context) (net.Conn, error) {
 	}
 }
 
+// errNotUnixWayIn refuses a way in that is not a Unix socket.
+var errNotUnixWayIn = errors.New("the app's way in must be a Unix socket, never one of the host's network")
+
 // sandboxServerSocket is the run directory's socket file for the app's way in.
 const sandboxServerSocket = "server.sock"
 
 // maxSocketPath is the longest path Linux takes for a Unix socket.
 const maxSocketPath = 107
 
-// RunSandboxHelper runs in the sandbox, in place of OpenCode: it serves the app's way in, the
-// listening Unix socket it gets as standard input, then runs command, OpenCode, and exits with it.
+// RunSandboxHelper runs in the sandbox, in place of OpenCode: it checks the sandbox's
+// confinement, serves the app's way in where it gets one (the listening Unix socket on standard
+// input, on Linux), then runs command, OpenCode, and exits with it.
 func RunSandboxHelper(command []string) error {
 	if len(command) == 1 && command[0] == confinementProbeCommand {
 		if err := runConfinementProbe(); err != nil {
@@ -101,22 +105,19 @@ func RunSandboxHelper(command []string) error {
 	if err := hideFromSandbox(); err != nil {
 		return fmt.Errorf("keep the app's way in from the sandbox: %w", err)
 	}
-	// FileListener keeps a close-on-exec copy, and OpenCode gets no standard input: the helper
-	// alone holds the way in.
-	listener, err := net.FileListener(os.Stdin)
+	listener, err := wayInFromStdin()
 	if err != nil {
-		return fmt.Errorf("standard input is not the app's way in: %w", err)
+		return err
 	}
-	os.Stdin.Close()
-	if _, unix := listener.(*net.UnixListener); !unix {
-		listener.Close()
-		return errors.New("the app's way in must be a Unix socket, never one of the host's network")
+	if listener != nil {
+		defer listener.Close()
 	}
-	defer listener.Close()
 	if err := verifySandboxConfinement(); err != nil {
 		return err
 	}
-	go serveTunnel(listener, dialTCP(sandboxServer))
+	if listener != nil {
+		go serveTunnel(listener, dialTCP(sandboxServer))
+	}
 
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, os.Stdout, os.Stderr

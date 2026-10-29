@@ -22,8 +22,8 @@ import (
 // runtimeName is what Connection.Runtime reports, and the app shows beside the sandbox's name.
 const runtimeName = "srt"
 
-// sandboxSupported is false where bubblewrap does not exist; tests switch it on.
-var sandboxSupported = runtime.GOOS == "linux"
+// sandboxSupported is false where srt does not run; tests switch it on.
+var sandboxSupported = runtime.GOOS == "linux" || runtime.GOOS == "darwin"
 
 // openCodeProvider is the provider name defined in opencode.json.
 const openCodeProvider = "self-hosted"

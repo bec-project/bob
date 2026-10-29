@@ -172,9 +172,8 @@ func getResolvedOptions(input Options) (resolvedOptions, error) {
 	}
 	options := resolvedOptions{Options: input}
 	var err error
-	options.binary, err = exec.LookPath("bwrap")
-	if err != nil {
-		return resolvedOptions{}, fmt.Errorf("find bwrap on PATH; install bubblewrap: %w", err)
+	if options.binary, err = findBwrap(); err != nil {
+		return resolvedOptions{}, err
 	}
 	// Resolved launch settings must not mutate the caller's map or argument arrays.
 	options.MCPServers = make(map[string]MCPServer, len(input.MCPServers))

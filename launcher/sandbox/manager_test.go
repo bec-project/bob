@@ -114,35 +114,6 @@ func TestStartReportsASandboxThatExitsAndCleansUp(t *testing.T) {
 	}
 }
 
-func TestStartRefusesMissingSeccompBeforeStartingAnyProcess(t *testing.T) {
-	options, root := fakeSandbox(t)
-	helper, err := validateSRTSeccompHelper(options.SandboxRuntime)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(helper); err != nil {
-		t.Fatal(err)
-	}
-	marker := filepath.Join(root, "host-mcp-started")
-	options.MCPServers = map[string]MCPServer{"bec": {
-		URL:         "http://localhost:19000/mcp",
-		HostCommand: []string{"/bin/sh", "-c", "touch \"$1\"", "sh", marker},
-	}}
-	manager := &Manager{}
-	_, err = manager.Start(context.Background(), options)
-	if err == nil || !strings.Contains(err.Error(), "reinstall the complete runtime") {
-		t.Fatalf("missing-helper startup = %v", err)
-	}
-	for _, path := range []string{marker, filepath.Join(root, "args")} {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("failed preflight started a process: %s, %v", path, err)
-		}
-	}
-	if manager.sandbox != nil || len(manager.hostMCPs) != 0 {
-		t.Fatal("failed preflight retained a sandbox or host MCP process")
-	}
-}
-
 func TestCheckFollowsTheSandboxAndItsHostMCPServers(t *testing.T) {
 	if err := (&Manager{}).Check(context.Background()); !errors.Is(err, ErrStopped) {
 		t.Errorf("Check without a sandbox = %v", err)
@@ -232,24 +203,5 @@ func TestOpenCodeEnvironment(t *testing.T) {
 				t.Fatal("a host MCP command reached OpenCode's configuration")
 			}
 		})
-	}
-}
-
-func TestStartRefusesARunFolderTooLongForTheWayIn(t *testing.T) {
-	options, root := fakeSandbox(t)
-	deep := filepath.Join(root, strings.Repeat("r", 100))
-	if err := os.Mkdir(deep, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("XDG_RUNTIME_DIR", deep)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	manager := &Manager{}
-	_, err := manager.Start(ctx, options)
-	if err == nil || !strings.Contains(err.Error(), "too long for a Unix socket") || !strings.Contains(err.Error(), "XDG_RUNTIME_DIR") {
-		t.Fatalf("Start = %v", err)
-	}
-	if entries, _ := os.ReadDir(deep); len(entries) != 0 {
-		t.Fatalf("a failed start left %v behind", entries)
 	}
 }

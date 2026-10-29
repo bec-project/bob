@@ -232,8 +232,8 @@ Keep the host launcher and other host-executed code outside sandbox.home and all
 
 ## Platform Notes
 
-Keep host code portable across macOS and Linux: bob-manager and the broker run on both, while the
-sandbox runs on Linux only. Subprocess cancellation uses POSIX process groups; Windows is
+Keep host code portable across macOS and Linux: bob-manager, the broker and the sandbox run on
+both, macOS for development only (its sandbox is weaker; see the sandbox README). Subprocess cancellation uses POSIX process groups; Windows is
 unsupported by the current implementation.
 
 bubblewrap needs unprivileged user namespaces, which RHEL 9 enables by default. Verify the sandbox
