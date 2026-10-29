@@ -10,3 +10,9 @@ __pycache__/
 /.coverage
 /launcher/coverage.out
 /coverage.xml
+
+# Qt Creator and Qt Design Studio
+CMakeLists.txt.user*
+*.qmlproject.qtds
+.qtcreator/
+/gui/qt/**/build*/

@@ -1,0 +1,56 @@
+name: Qt desktop app
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version stamped into the bundles
+        type: string
+        required: true
+      ref:
+        description: Commit to build
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  rpm:
+    runs-on: ubuntu-latest
+    # RHEL 9 has no Qt 6.12, so the RPM brings Qt's own binaries; built where it runs
+    container: almalinux:9
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      # bob-manager is built into the RPM
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: launcher/go.mod
+          cache: false
+      - name: Build the RHEL 9 RPM (runs the unit tests)
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash ci/build_qt_rpm.sh "$VERSION" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qt-desktop-rpm
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-latest # arm64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Build the DMG (runs the unit tests)
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash ci/build_qt_macos.sh "$VERSION" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qt-desktop-macos
+          path: dist/*.dmg
+          if-no-files-found: error

@@ -31,6 +31,7 @@ Remote access requires an explicit bind address and protected TLS ingress.
 | Path | What it holds |
 | --- | --- |
 | `launcher/` | Go module: the `bob-manager` CLI (`cmd/bob-manager`) and bob's sandbox manager, package `sandbox` |
+| `gui/qt/` | The desktop app (Qt 6, C++ and QML): starts and holds bob, and chats with it; RPM for RHEL 9 and a macOS DMG |
 | `deploy/` | Deployment configuration: the annotated `bob.example.toml` |
 | `ci/`, `.github/` | Release tooling and CI workflows |
 
@@ -38,6 +39,7 @@ Remote access requires an explicit bind address and protected TLS ingress.
 
 - [Configuration example](deploy/bob.example.toml) — settings and defaults
 - [Sandbox manager](launcher/sandbox/README.md) — configuration, network policy, isolation limits, and testing
+- [Desktop app](gui/qt/README.md) — features, building, Qt Creator and Design Studio, released bundles
 
 The sandbox reaches only the configured endpoints, filtered by host and port, not URL path, and
 the agent runs as your own user. Review the
