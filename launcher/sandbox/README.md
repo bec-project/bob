@@ -27,8 +27,9 @@ bob-manager rejects any setting it does not know and names it.
   sandbox-runtime's `dist/cli.js`, by default the copy installed with bob-manager. `sandbox.home`
   is the private storage root for sessions, cache, state and generated policy; it defaults to `$XDG_DATA_HOME/bob/home` (or
   `~/.local/share/bob/home`), and a relative path resolves beside the config. Keep it on a local
-  filesystem with mode 0700, not NFS: sessions live in SQLite. Its path may be at most 61 bytes long,
-  since sandbox-runtime makes Unix sockets in `.cache/tmp` under it; bob-manager refuses a longer one.
+  filesystem with mode 0700, not NFS: sessions live in SQLite. Its path may be at most 61 bytes long
+  (57 on macOS), since sandbox-runtime makes Unix sockets in `.cache/tmp` under it; bob-manager
+  refuses a longer one.
   `sandbox.bind_address` is described under Access.
 - **Source access:** direct workspace mounts are unsupported. Remove `[workspace]` from old
   configurations and provide code through the configured BEC MCP source tools. OpenCode's newer
@@ -158,10 +159,10 @@ so every bob of a user keeps the same sessions.
 
 ## Runtime requirements
 
-bob's sandbox runs on Linux only. bob-manager and its broker also run on macOS, but starting bob
-there fails; run bob in a Linux VM instead. bob-manager runs OpenCode under Anthropic's
-[sandbox-runtime](https://github.com/anthropic-experimental/sandbox-runtime) (`srt`), which
-needs:
+bob's sandbox runs on Linux, its deployment target, and on macOS for development. bob-manager
+runs OpenCode under Anthropic's
+[sandbox-runtime](https://github.com/anthropic-experimental/sandbox-runtime) (`srt`). On Linux
+srt needs:
 
 - `bwrap` on bob-manager's PATH, from RHEL 9's BaseOS package `bubblewrap`, and unprivileged user
   namespaces, which RHEL 9 enables by default;
@@ -176,6 +177,21 @@ needs:
   validating its configuration-discovery protections again.
 - srt's executable `vendor/seccomp/<architecture>/apply-seccomp`, matching the machine. Bob
   requires this helper explicitly and never accepts srt's missing-helper fallback.
+
+On macOS (Apple silicon), srt confines OpenCode with Seatbelt (`sandbox-exec`) and needs neither
+bubblewrap, socat nor the seccomp helper. Node.js 22.12 or later, `rg` and OpenCode 1.18.35 come
+from the PATH as on Linux (Homebrew's `node` and `ripgrep` work), and `sandbox.runtime` names
+srt's `dist/cli.js`. macOS is weaker than Linux, so use it for development only:
+
+- The sandbox shares the Mac's network. OpenCode cannot serve on a Unix socket, so it serves on a
+  loopback port, which needs srt's `allowLocalBinding`. That also lets the sandbox connect to every
+  loopback port of the Mac, a local Redis included; other hosts are still reached only through
+  srt's proxy.
+- `localhost` and `127.0.0.1` in bob.toml are reached directly on loopback, so a local MCP server
+  sees `Host: 127.0.0.1:<port>` and needs no `--allowed-hosts`.
+- Seatbelt shows no status a process could read: before OpenCode starts, the helper checks that a
+  connection to another host, a Unix socket connection and a write outside the sandbox's folders
+  are refused.
 
 No kernel module, `NET_ADMIN` capability or root access is needed.
 
@@ -305,8 +321,8 @@ python3 -m unittest discover -s ci -p '*_test.py'
 ```
 
 Unit tests need no bubblewrap: they put a stand-in `bwrap` first on the PATH and use synthetic
-endpoints and host MCP servers. They run on Linux and macOS; the Ctrl-C broker test runs on
-Linux only. The opt-in real sandbox tests below exercise the installed runtime on Linux;
+endpoints and host MCP servers. They run on Linux and macOS, each with its platform's own
+tests. The opt-in real sandbox tests below exercise the installed runtime on Linux;
 ordinary unit tests use stand-ins. See
 [CI workflows](../../.github/workflows) for checks and release publishing.
 
