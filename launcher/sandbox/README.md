@@ -142,7 +142,10 @@ srt needs:
 On macOS (Apple silicon), srt confines OpenCode with Seatbelt (`sandbox-exec`) and needs neither
 bubblewrap, socat nor the seccomp helper. Node.js 22.12 or later, `rg` and OpenCode 1.18.35 come
 from the PATH as on Linux (Homebrew's `node` and `ripgrep` work), and `sandbox.runtime` names
-srt's `dist/cli.js`. macOS is weaker than Linux, so use it for development only:
+srt's `dist/cli.js`. The desktop app's DMG carries all of them in the app: bob-manager in
+`Contents/MacOS`, OpenCode, Node.js and `rg` in `Contents/libexec`, and srt in
+`Contents/lib/sandbox-runtime`; bob-manager looks there first, as on Linux beside its own folder.
+macOS is weaker than Linux, so use it for development only:
 
 - The sandbox shares the Mac's network. OpenCode cannot serve on a Unix socket, so it serves on a
   loopback port, which needs srt's `allowLocalBinding`. That also lets the sandbox connect to every
@@ -378,7 +381,8 @@ restart the broker so already-running processes use the new runtime and policy.
 
 Main-branch releases run only after CI passes. Semantic release creates the version tag
 and GitHub binary assets; delivery downloads those original assets, verifies their
-checksums, and uploads them to Gitea.
+checksums, and uploads them to Gitea. The desktop app's bundles follow (see
+[released bundles](../../gui/qt/README.md#released-bundles)).
 If delivery fails, rerun the failed workflow jobs. An existing release tag on the same
 CI-tested commit is reused; identical files already in Gitea are accepted, while
 conflicting files fail delivery. No new release commit or version is needed for a retry.
