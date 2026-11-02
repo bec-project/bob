@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "summary": "No beamline states are configured. Scan interlock disabled.",
+ "findings": [],
+ "data": {
+  "states": [],
+  "interlock": {
+   "enabled": false,
+   "trigger": "do_nothing",
+   "watched": {},
+   "tripped_by": [],
+   "primary_queue_locked": false
+  }
+ },
+ "truncated": false
+}

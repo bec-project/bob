@@ -9,6 +9,7 @@ qt_add_qml_module(bobbackend
         chatlogic.cpp chatlogic.h
         desktop.cpp desktop.h
         markdowntext.cpp markdowntext.h
+        plugins.cpp plugins.h
         prefs.cpp prefs.h
         sessionlistmodel.cpp sessionlistmodel.h
         threadmodel.cpp threadmodel.h

@@ -1,0 +1,19 @@
+{
+ "ok": true,
+ "summary": "The function ScanStatus._raise_if_failed in bec/bec_server/bec_server/scan_server/scans/scan_status.py (lines 180 to 183 of 266).",
+ "findings": [],
+ "data": {
+  "file": "bec/bec_server/bec_server/scan_server/scans/scan_status.py",
+  "lines_total": 266,
+  "symbol": {
+   "name": "ScanStatus._raise_if_failed",
+   "kind": "function"
+  },
+  "range": [
+   180,
+   183
+  ],
+  "code": "   180|     @staticmethod\n   181|     def _raise_if_failed(obj: concurrent.futures.Future) -> None:\n   182|         if obj.exception() is not None:\n   183|             raise obj.exception()"
+ },
+ "truncated": false
+}

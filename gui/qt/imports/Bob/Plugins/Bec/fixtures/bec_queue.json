@@ -1,0 +1,79 @@
+{
+ "ok": true,
+ "summary": "Primary queue RUNNING, nothing queued; last finished: line_scan #6 COMPLETED.",
+ "findings": [],
+ "data": {
+  "queues": {
+   "primary": {
+    "status": "RUNNING",
+    "locks": [],
+    "size": 0,
+    "items": []
+   }
+  },
+  "running": null,
+  "history": [
+   {
+    "status": "COMPLETED",
+    "reason": null,
+    "queue": "primary",
+    "requests": [
+     "line_scan"
+    ],
+    "scan_numbers": [
+     6
+    ],
+    "queue_id": "82248062-03c9-4a21-801b-56f332e5aa77"
+   },
+   {
+    "status": "COMPLETED",
+    "reason": null,
+    "queue": "primary",
+    "requests": [
+     "line_scan"
+    ],
+    "scan_numbers": [
+     5
+    ],
+    "queue_id": "58a2e998-5aae-4842-b137-ba46dbaaf9d0"
+   },
+   {
+    "status": "COMPLETED",
+    "reason": null,
+    "queue": "primary",
+    "requests": [
+     "line_scan"
+    ],
+    "scan_numbers": [
+     4
+    ],
+    "queue_id": "176ed074-36ba-4798-8a47-976d02f8f165"
+   },
+   {
+    "status": "COMPLETED",
+    "reason": null,
+    "queue": "primary",
+    "requests": [
+     "line_scan"
+    ],
+    "scan_numbers": [
+     3
+    ],
+    "queue_id": "7c8fc509-6ba1-4f84-9efa-1151e3baa83b"
+   },
+   {
+    "status": "COMPLETED",
+    "reason": null,
+    "queue": "primary",
+    "requests": [
+     "line_scan"
+    ],
+    "scan_numbers": [
+     2
+    ],
+    "queue_id": "da139836-08bb-44cf-97d2-c55fa91123b8"
+   }
+  ]
+ },
+ "truncated": false
+}

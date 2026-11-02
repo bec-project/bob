@@ -4,6 +4,7 @@
 #include "bob.h"
 #include "bobpaths.h"
 #include "chat.h"
+#include "plugins.h"
 #include "prefs.h"
 
 #include <QDir>
@@ -14,6 +15,7 @@
 #include <QQuickStyle>
 
 Q_IMPORT_QML_PLUGIN(Bob_BackendPlugin)
+Q_IMPORT_QML_PLUGIN(Bob_Plugins_BecPlugin)
 
 int main(int argc, char *argv[])
 {
@@ -37,6 +39,8 @@ int main(int argc, char *argv[])
     Prefs::setInstance(&prefs);
     Chat chat(&bob, &prefs);
     Chat::setInstance(&chat);
+    Plugins plugins(&bob, &chat, &prefs);
+    Plugins::setInstance(&plugins);
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },

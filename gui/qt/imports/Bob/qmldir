@@ -22,7 +22,9 @@ Kbd 1.0 Kbd.qml
 Main 1.0 Main.qml
 MarkdownView 1.0 MarkdownView.qml
 McpChip 1.0 McpChip.qml
+PanelFrame 1.0 PanelFrame.qml
 PermissionCard 1.0 PermissionCard.qml
+singleton PluginRegistry 1.0 PluginRegistry.qml
 QuestionCard 1.0 QuestionCard.qml
 RequestCard 1.0 RequestCard.qml
 Requests 1.0 Requests.qml

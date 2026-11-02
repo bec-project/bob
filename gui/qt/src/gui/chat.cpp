@@ -306,6 +306,7 @@ QVariantList Chat::permissions() const
             {QStringLiteral("title"), view.title},
             {QStringLiteral("detail"), view.detail},
             {QStringLiteral("tool"), str(tool, "tool")},
+            {QStringLiteral("toolInput"), obj(obj(tool, "state"), "input").toVariantMap()},
             {QStringLiteral("permission"), str(request, "permission")},
             {QStringLiteral("always"), always},
         };
@@ -775,6 +776,11 @@ void Chat::fork(const QString &messageID)
 void Chat::reconnectMcp(const QString &name)
 {
     m_client->reconnectMcp(name, failNotice());
+}
+
+void Chat::insertPrompt(const QString &text)
+{
+    emit composerRequest(text, false);
 }
 
 void Chat::setNotice(const QString &text)

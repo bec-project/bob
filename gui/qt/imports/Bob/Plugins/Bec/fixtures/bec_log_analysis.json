@@ -1,0 +1,509 @@
+{
+ "ok": true,
+ "summary": "5 distinct problems (5 errors) in 7 of the 760 cached records; showing 4, most severe and most recent first. I1, I2, I3 and I4 started together 58 min ago; the first, I1 ZeroDivisionError in LogProbe, usually explains the others. Narrow with minutes or service, or raise limit, to see the rest.",
+ "findings": [
+  "Error: I5 KeyError in FailureProbe at __main__:<module>:18 (2 records, last 29 min ago): probe lookup failed. Likely cause: an exception in code: a bug, or a value the code did not expect, surfacing at __main__:<module>:18. Try: read the code at the origin frame and the records just before the first occurrence. Next: bec_log_range(around=689).",
+  "Error: I3 DeviceInstructionError in ScanServer at bec_server/scan_server/scans/scan_status.py:183 (_raise_if_failed) (2 records, last 58 min ago): DeviceInstructionError: An error occurred during 'set' on device 'samx'. Likely cause: a move was requested to a position outside the device's software limits. Try: move within the limits, or widen them if the target is intended (dev.samx.limits = [low, high]). Next: bec_device_diagnose(device=\"samx\").",
+  "Error: I4 MAJOR alarm on samx (once, last 58 min ago): LimitError: position=50 not within limits (-5, 5). Likely cause: a move was requested to a position outside the device's software limits. Try: move within the limits, or widen them if the target is intended (dev.samx.limits = [low, high]). Next: bec_device_diagnose(device=\"samx\").",
+  "Error: I2 KeyError in LogProbe at /tmp/probe/logs/make_errors.py:18 (<module>) (once, last 58 min ago): probe: format_exc form | KeyError: 'missing'. Likely cause: an exception in code: a bug, or a value the code did not expect, surfacing at /tmp/probe/logs/make_errors.py:18 (<module>). Try: read the code at the origin frame and the records just before the first occurrence. Next: bec_log_range(around=548).",
+  "Info: Code mode can show the source of the 12 frames behind ScanAbortion (from DeviceInstructionError: An error occurred during 'set' on device 'samx'.). Next: bec_code_traceback(record=592).",
+  "Info: Code mode can show the source of the 1 frames behind KeyError: 'missing'. Next: bec_code_traceback(record=548)."
+ ],
+ "data": {
+  "cache": {
+   "source": "cache",
+   "records": 760,
+   "capacity": 3000,
+   "first_id": 1,
+   "last_id": 760,
+   "oldest": "2026-10-13T16:33:13+00:00",
+   "newest": "2026-10-13T17:31:23+00:00"
+  },
+  "window": {
+   "since": null,
+   "service": null,
+   "level": "error"
+  },
+  "incidents_found": 5,
+  "incidents": [
+   {
+    "ref": "I5",
+    "title": "KeyError in FailureProbe",
+    "kind": "exception",
+    "severity": "error",
+    "count": 2,
+    "first": "2026-10-13T17:03:11.431+00:00",
+    "last": "2026-10-13T17:03:24.504+00:00",
+    "first_id": 689,
+    "last_id": 739,
+    "ids": [
+     689,
+     739
+    ],
+    "services": [
+     "FailureProbe"
+    ],
+    "message": "probe lookup failed",
+    "category": "code_error",
+    "likely_cause": "an exception in code: a bug, or a value the code did not expect, surfacing at __main__:<module>:18",
+    "suggestion": "read the code at the origin frame and the records just before the first occurrence",
+    "before": [
+     {
+      "id": 683,
+      "time": "2026-10-13T17:03:11.420+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Received new config: MessageObject(topic=info/devices/config_update, value=metadata={'RID': '28a6e5ae-e3c8-420c-b273-28067b0fb609'} action='update' config={'samy': {'deviceConfig': {'limits': [-2, 2]}\u2026 [cut]"
+     },
+     {
+      "id": 684,
+      "time": "2026-10-13T17:03:11.417+00:00",
+      "service": "BECMCPClient",
+      "level": "INFO",
+      "message": "Received new config: MessageObject(topic=info/devices/config_update, value=metadata={'RID': '28a6e5ae-e3c8-420c-b273-28067b0fb609'} action='update' config={'samy': {'deviceConfig': {'limits': [-2, 2]}\u2026 [cut]"
+     },
+     {
+      "id": 685,
+      "time": "2026-10-13T17:03:11.425+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Updating device config for device samy."
+     },
+     {
+      "id": 686,
+      "time": "2026-10-13T17:03:11.427+00:00",
+      "service": "DAPServer",
+      "level": "INFO",
+      "message": "Updating device config for device samy."
+     },
+     {
+      "id": 687,
+      "time": "2026-10-13T17:03:11.426+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Updating device config for device samy."
+     },
+     {
+      "id": 688,
+      "time": "2026-10-13T17:03:11.429+00:00",
+      "service": "BECMCPClient",
+      "level": "INFO",
+      "message": "Updating device config for device samy."
+     }
+    ],
+    "after": [
+     {
+      "id": 690,
+      "time": "2026-10-13T17:03:11.434+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Receiving scan request: {'scan_type': 'umv', 'parameter': {'args': {'samy': [30]}, 'kwargs': {'relative': False, 'system_config': {'file_suffix': None, 'file_directory': None}}}, 'queue': 'primary', '\u2026 [cut]"
+     },
+     {
+      "id": 691,
+      "time": "2026-10-13T17:03:11.440+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Appending new scan to queue"
+     },
+     {
+      "id": 692,
+      "time": "2026-10-13T17:03:11.443+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Receiving scan: {'scan_type': 'umv', 'parameter': {'args': {'samy': [30]}, 'kwargs': {'relative': False, 'system_config': {'file_suffix': None, 'file_directory': None}}}, 'queue': 'primary', 'allow_re\u2026 [cut]"
+     }
+    ]
+   },
+   {
+    "ref": "I3",
+    "title": "DeviceInstructionError in ScanServer",
+    "kind": "traceback",
+    "severity": "error",
+    "count": 2,
+    "first": "2026-10-13T16:33:44.195+00:00",
+    "last": "2026-10-13T16:33:44.201+00:00",
+    "first_id": 589,
+    "last_id": 592,
+    "ids": [
+     589,
+     592
+    ],
+    "services": [
+     "ScanServer"
+    ],
+    "message": "DeviceInstructionError: An error occurred during 'set' on device 'samx'.\nLimitError: position=50 not within limits (-5, 5) (logged as ScanAbortion)",
+    "traceback": {
+     "exception": "bec_server.scan_server.errors.ScanAbortion",
+     "message": "",
+     "root_cause": "DeviceInstructionError: An error occurred during 'set' on device 'samx'.",
+     "origin": {
+      "file": "/opt/bec/bec_server/bec_server/scan_server/scans/scan_status.py",
+      "line": 183,
+      "function": "_raise_if_failed",
+      "code": "raise obj.exception()",
+      "package": "bec_server",
+      "path": "bec_server/scan_server/scans/scan_status.py"
+     }
+    },
+    "devices": [
+     "samx"
+    ],
+    "scan": {
+     "name": "umv"
+    },
+    "related": [
+     "I1",
+     "I2",
+     "I4"
+    ],
+    "category": "limits",
+    "likely_cause": "a move was requested to a position outside the device's software limits",
+    "suggestion": "move within the limits, or widen them if the target is intended (dev.samx.limits = [low, high])",
+    "before": [
+     {
+      "id": 583,
+      "time": "2026-10-13T16:33:44.177+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "New scan queue:"
+     },
+     {
+      "id": 584,
+      "time": "2026-10-13T16:33:44.179+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "primary queue / ScanQueueStatus.RUNNING"
+     },
+     {
+      "id": 585,
+      "time": "2026-10-13T16:33:44.184+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Updating queue info"
+     },
+     {
+      "id": 586,
+      "time": "2026-10-13T16:33:44.184+00:00",
+      "service": "ScanBundler",
+      "level": "INFO",
+      "message": "Received device message without scan_id"
+     },
+     {
+      "id": 587,
+      "time": "2026-10-13T16:33:44.186+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "New scan queue:"
+     },
+     {
+      "id": 588,
+      "time": "2026-10-13T16:33:44.188+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "primary queue / ScanQueueStatus.RUNNING"
+     }
+    ],
+    "after": [
+     {
+      "id": 590,
+      "time": "2026-10-13T16:33:44.197+00:00",
+      "service": "ScanServer",
+      "level": "ERROR",
+      "message": "Alarm (MAJOR) raised for device 'samx': LimitError: position=50 not within limits (-5, 5)"
+     },
+     {
+      "id": 591,
+      "time": "2026-10-13T16:33:44.197+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Received alarm: metadata={} severity=2 info=ErrorInfo(id='545c67fc-57e5-432b-8a00-a13dd1059c32', error_message='LimitError: position=50 not within limits (-5, 5)\\nThe status DeviceStatus from device s\u2026 [cut]"
+     },
+     {
+      "id": 593,
+      "time": "2026-10-13T16:33:44.201+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "New scan queue:"
+     }
+    ]
+   },
+   {
+    "ref": "I4",
+    "title": "MAJOR alarm on samx",
+    "kind": "alarm",
+    "severity": "error",
+    "count": 1,
+    "first": "2026-10-13T16:33:44.197+00:00",
+    "last": "2026-10-13T16:33:44.197+00:00",
+    "first_id": 590,
+    "last_id": 590,
+    "ids": [
+     590
+    ],
+    "services": [
+     "ScanServer"
+    ],
+    "message": "LimitError: position=50 not within limits (-5, 5)\nThe status DeviceStatus from device samx failed during the execution of the following instruction:\n{\n  \"__bec_codec__\": {\n    \"encoder_name\": \"BECMessage\",\n    \"type_name\": \"DeviceInstructionMessage\",\n    \"data\": {\n      \"metadata\": {\n        \"RID\": \"cd73eb71-bc65-45e1-97ff-e669fd588f3b\",\n        \"device_instr_id\": \"d1497e1c-c9c6-42db-b981-114d8ea23638\",\n        \"response\": true\n      },\n      \"device\": \"samx\",\n      \"action\": \"set\",\n      \"parameter\": {\n        \"value\": 50\n      }\n    }\n  }\n}",
+    "alarm": {
+     "severity": "MAJOR",
+     "device": "samx"
+    },
+    "devices": [
+     "samx"
+    ],
+    "scan": {
+     "name": "umv"
+    },
+    "related": [
+     "I1",
+     "I2",
+     "I3"
+    ],
+    "category": "limits",
+    "likely_cause": "a move was requested to a position outside the device's software limits",
+    "suggestion": "move within the limits, or widen them if the target is intended (dev.samx.limits = [low, high])",
+    "before": [
+     {
+      "id": 584,
+      "time": "2026-10-13T16:33:44.179+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "primary queue / ScanQueueStatus.RUNNING"
+     },
+     {
+      "id": 585,
+      "time": "2026-10-13T16:33:44.184+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Updating queue info"
+     },
+     {
+      "id": 586,
+      "time": "2026-10-13T16:33:44.184+00:00",
+      "service": "ScanBundler",
+      "level": "INFO",
+      "message": "Received device message without scan_id"
+     },
+     {
+      "id": 587,
+      "time": "2026-10-13T16:33:44.186+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "New scan queue:"
+     },
+     {
+      "id": 588,
+      "time": "2026-10-13T16:33:44.188+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "primary queue / ScanQueueStatus.RUNNING"
+     },
+     {
+      "id": 589,
+      "time": "2026-10-13T16:33:44.195+00:00",
+      "service": "ScanServer",
+      "level": "ERROR",
+      "message": "Traceback (most recent call last): [DeviceInstructionError: An error occurred during 'set' on device 'samx'.]"
+     }
+    ],
+    "after": [
+     {
+      "id": 591,
+      "time": "2026-10-13T16:33:44.197+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "Received alarm: metadata={} severity=2 info=ErrorInfo(id='545c67fc-57e5-432b-8a00-a13dd1059c32', error_message='LimitError: position=50 not within limits (-5, 5)\\nThe status DeviceStatus from device s\u2026 [cut]"
+     },
+     {
+      "id": 592,
+      "time": "2026-10-13T16:33:44.201+00:00",
+      "service": "ScanServer",
+      "level": "ERROR",
+      "message": "Traceback (most recent call last): [ScanAbortion]"
+     },
+     {
+      "id": 593,
+      "time": "2026-10-13T16:33:44.201+00:00",
+      "service": "ScanServer",
+      "level": "INFO",
+      "message": "New scan queue:"
+     }
+    ]
+   },
+   {
+    "ref": "I2",
+    "title": "KeyError in LogProbe",
+    "kind": "traceback",
+    "severity": "error",
+    "count": 1,
+    "first": "2026-10-13T16:33:43.993+00:00",
+    "last": "2026-10-13T16:33:43.993+00:00",
+    "first_id": 548,
+    "last_id": 548,
+    "ids": [
+     548
+    ],
+    "services": [
+     "LogProbe"
+    ],
+    "message": "probe: format_exc form | KeyError: 'missing'",
+    "traceback": {
+     "exception": "KeyError",
+     "message": "'missing'",
+     "root_cause": null,
+     "origin": {
+      "file": "/tmp/probe/logs/make_errors.py",
+      "line": 18,
+      "function": "<module>",
+      "code": "{}[\"missing\"]"
+     }
+    },
+    "related": [
+     "I1",
+     "I3",
+     "I4"
+    ],
+    "category": "code_error",
+    "likely_cause": "an exception in code: a bug, or a value the code did not expect, surfacing at /tmp/probe/logs/make_errors.py:18 (<module>)",
+    "suggestion": "read the code at the origin frame and the records just before the first occurrence",
+    "before": [
+     {
+      "id": 542,
+      "time": "2026-10-13T16:33:43.626+00:00",
+      "service": "LogProbe",
+      "level": "SUCCESS",
+      "message": "All BEC services are running."
+     },
+     {
+      "id": 543,
+      "time": "2026-10-13T16:33:43.772+00:00",
+      "service": "LogProbe",
+      "level": "INFO",
+      "message": "Starting device manager"
+     },
+     {
+      "id": 544,
+      "time": "2026-10-13T16:33:43.896+00:00",
+      "service": "LogProbe",
+      "level": "INFO",
+      "message": "Adding new devices:"
+     },
+     {
+      "id": 545,
+      "time": "2026-10-13T16:33:43.968+00:00",
+      "service": "LogProbe",
+      "level": "INFO",
+      "message": "Starting alarm listener"
+     },
+     {
+      "id": 546,
+      "time": "2026-10-13T16:33:43.989+00:00",
+      "service": "LogProbe",
+      "level": "INFO",
+      "message": "Starting new client"
+     },
+     {
+      "id": 547,
+      "time": "2026-10-13T16:33:43.992+00:00",
+      "service": "LogProbe",
+      "level": "ERROR",
+      "message": "probe: logger.exception form"
+     }
+    ],
+    "after": [
+     {
+      "id": 549,
+      "time": "2026-10-13T16:33:43.993+00:00",
+      "service": "LogProbe",
+      "level": "INFO",
+      "message": "Waiting for reply with timeout 32 s"
+     },
+     {
+      "id": 550,
+      "time": "2026-10-13T16:33:43.995+00:00",
+      "service": "SciHub",
+      "level": "INFO",
+      "message": "Received request: metadata={'RID': '4e6c1ab6-8b7c-4758-89bc-2544e16b645d'} action='update' config={'samx': {'deviceConfig': {'limits': [-5, 5]}}}"
+     },
+     {
+      "id": 551,
+      "time": "2026-10-13T16:33:43.998+00:00",
+      "service": "DeviceServer",
+      "level": "INFO",
+      "message": "Received request: MessageObject(topic=internal/devices/device_server_config_update, value=metadata={'RID': 'f9ee0c48-8c43-4f1e-973c-87cd54508614'} action='update' config={'samx': {'deviceConfig': {'li\u2026 [cut]"
+     }
+    ]
+   }
+  ],
+  "findings": [
+   {
+    "severity": "error",
+    "code": "logs.code_error",
+    "subject": "I5",
+    "next": {
+     "tool": "bec_log_range",
+     "args": {
+      "around": 689
+     }
+    }
+   },
+   {
+    "severity": "error",
+    "code": "logs.limits",
+    "subject": "samx",
+    "next": {
+     "tool": "bec_device_diagnose",
+     "args": {
+      "device": "samx"
+     }
+    }
+   },
+   {
+    "severity": "error",
+    "code": "logs.limits",
+    "subject": "samx",
+    "next": {
+     "tool": "bec_device_diagnose",
+     "args": {
+      "device": "samx"
+     }
+    }
+   },
+   {
+    "severity": "error",
+    "code": "logs.code_error",
+    "subject": "I2",
+    "next": {
+     "tool": "bec_log_range",
+     "args": {
+      "around": 548
+     }
+    }
+   },
+   {
+    "severity": "info",
+    "code": "traceback_code",
+    "subject": "ScanAbortion (from DeviceInstructionError: An error occurred during 'set' on device 'samx'.)",
+    "next": {
+     "tool": "bec_code_traceback",
+     "args": {
+      "record": 592
+     }
+    }
+   },
+   {
+    "severity": "info",
+    "code": "traceback_code",
+    "subject": "KeyError: 'missing'",
+    "next": {
+     "tool": "bec_code_traceback",
+     "args": {
+      "record": 548
+     }
+    }
+   }
+  ]
+ },
+ "truncated": true
+}

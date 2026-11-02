@@ -1,0 +1,292 @@
+{
+ "ok": true,
+ "summary": "2981 records match (7 ERROR, 242 WARNING, 205 SUCCESS, 3 CONSOLE_LOG, 2524 INFO) out of 2981 scanned, collapsed into 759 distinct messages; showing the newest 30. Newest match 0 s ago. Narrow with level, service, text or minutes, or raise limit.",
+ "findings": [],
+ "data": {
+  "window": {
+   "scanned": 2981,
+   "oldest": "2026-10-07T19:06:09+00:00",
+   "newest": "2026-10-08T23:40:25+00:00",
+   "since": null,
+   "complete": true
+  },
+  "matched": 2981,
+  "distinct_messages": 759,
+  "levels": {
+   "ERROR": 7,
+   "WARNING": 242,
+   "SUCCESS": 205,
+   "CONSOLE_LOG": 3,
+   "INFO": 2524
+  },
+  "services": {
+   "ScanBundler": 838,
+   "BECWidgets": 699,
+   "ScanServer": 367,
+   "pr5-driver": 285,
+   "DeviceServer": 248,
+   "DAPServer": 222,
+   "BECMCPClient": 104,
+   "BECIPythonClient": 79,
+   "FileWriterManager": 49,
+   "pylsp-bec": 46,
+   "SciHub": 21,
+   "BECClient": 12,
+   "BECMCPProbe": 8,
+   "BECIPythonClient_CONSOLE": 3
+  },
+  "alarms": [],
+  "entries": [
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 9,
+    "first": "2026-10-08T22:06:28+00:00",
+    "last": "2026-10-08T22:21:46+00:00",
+    "message": "Receiving scan modification: {'scan_id': None, 'request_id': None, 'action': 'release_lock', 'parameter': {'identifier': 'ScanInterlockActor'}, 'queue': 'primary'}"
+   },
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 9,
+    "first": "2026-10-08T22:06:28+00:00",
+    "last": "2026-10-08T22:21:46+00:00",
+    "message": "Scan interception: metadata={} scan_id=None request_id=None action='release_lock' parameter={'identifier': 'ScanInterlockActor'} queue='primary'"
+   },
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 18,
+    "first": "2026-10-08T22:06:28+00:00",
+    "last": "2026-10-08T22:21:46+00:00",
+    "message": "Removing lock from queue primary: reason='' identifier='ScanInterlockActor' allow_device_instructions=True"
+   },
+   {
+    "service": "ScanServer",
+    "level": "WARNING",
+    "count": 6,
+    "first": "2026-10-08T22:06:28+00:00",
+    "last": "2026-10-08T22:21:46+00:00",
+    "message": "Lock with identifier 'ScanInterlockActor' not found in queue 'primary'. Nothing to remove."
+   },
+   {
+    "service": "DeviceServer",
+    "level": "WARNING",
+    "count": 6,
+    "first": "2026-10-07T19:07:30+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "message": "Unstaging waveform, Staged.yes"
+   },
+   {
+    "service": "ScanBundler",
+    "level": "INFO",
+    "count": 280,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 280,
+    "message": "Sending point 59 for scan_id 735766d1-be17-46e0-9565-414aa51c4523."
+   },
+   {
+    "service": "ScanBundler",
+    "level": "INFO",
+    "count": 280,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 280,
+    "message": "Emitting progress for scan 735766d1-be17-46e0-9565-414aa51c4523: 60/60 (done=False)"
+   },
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 6,
+    "first": "2026-10-07T19:07:30+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "New scan status: 735766d1-be17-46e0-9565-414aa51c4523 / closed / ScanInfo({'scan_name': 'line_scan', 'scan_id': '735766d1-be17-46e0-9565-414aa51c4523', 'scan_type': <ScanType.SOFTWARE_TRIGGERED: 'software_triggered'>, 'scan_number': 6, 'dataset_number': 6, 'num_points': 60, 'positions': '[[-5.    ]\\\u2026 [cut]"
+   },
+   {
+    "service": "ScanBundler",
+    "level": "INFO",
+    "count": 12,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "DeviceServer",
+    "level": "INFO",
+    "count": 12,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "FileWriterManager",
+    "level": "INFO",
+    "count": 12,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "ScanBundler",
+    "level": "INFO",
+    "count": 6,
+    "first": "2026-10-07T19:07:30+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new scan status: ScanStatusMessage(({'metadata': {}, 'scan_id': '735766d1-be17-46e0-9565-414aa51c4523', 'status': 'closed', 'reason': None, 'scan_number': 6, 'session_id': None, 'num_points': 60, 'num_monitored_readouts': 60, 'scan_name': 'line_scan', 'scan_type': 'software_triggered', 'dat\u2026 [cut]"
+   },
+   {
+    "service": "DAPServer",
+    "level": "INFO",
+    "count": 12,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "SciHub",
+    "level": "INFO",
+    "count": 12,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "ScanBundler",
+    "level": "INFO",
+    "count": 6,
+    "first": "2026-10-07T19:07:30+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Emitting progress for scan 735766d1-be17-46e0-9565-414aa51c4523: 60/60 (done=True)"
+   },
+   {
+    "service": "pylsp-bec",
+    "level": "INFO",
+    "count": 20,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "BECWidgets",
+    "level": "INFO",
+    "count": 24,
+    "first": "2026-10-07T19:07:24+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 24,
+    "first": "2026-10-07T19:07:25+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 6,
+    "message": "Received new ScanStatusMessage with ID 735766d1-be17-46e0-9565-414aa51c4523"
+   },
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 58,
+    "first": "2026-10-07T19:07:24+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "variants": 19,
+    "message": "primary queue / ScanQueueStatus.RUNNING \u2026 [4 more lines] \u2026 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"
+   },
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 73,
+    "first": "2026-10-07T19:06:13+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "message": "New scan queue:"
+   },
+   {
+    "service": "ScanServer",
+    "level": "INFO",
+    "count": 6,
+    "first": "2026-10-07T19:06:13+00:00",
+    "last": "2026-10-08T22:22:35+00:00",
+    "message": "primary queue / ScanQueueStatus.RUNNING \u2026 [3 more lines] \u2026 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"
+   },
+   {
+    "service": "FileWriterManager",
+    "level": "INFO",
+    "count": 1,
+    "last": "2026-10-08T22:22:35+00:00",
+    "message": "Finished writing async data file /Users/e12345/PSI/.demo/review/data/S00000-00999/S00006/S00006_master.tmp"
+   },
+   {
+    "service": "FileWriterManager",
+    "level": "INFO",
+    "count": 1,
+    "last": "2026-10-08T22:22:35+00:00",
+    "message": "Writing to file /Users/e12345/PSI/.demo/review/data/S00000-00999/S00006/S00006_master.tmp."
+   },
+   {
+    "service": "FileWriterManager",
+    "level": "INFO",
+    "count": 1,
+    "last": "2026-10-08T22:22:36+00:00",
+    "message": "Renaming temporary file /Users/e12345/PSI/.demo/review/data/S00000-00999/S00006/S00006_master.tmp to final file /Users/e12345/PSI/.demo/review/data/S00000-00999/S00006/S00006_master.h5."
+   },
+   {
+    "service": "FileWriterManager",
+    "level": "INFO",
+    "count": 1,
+    "last": "2026-10-08T22:22:36+00:00",
+    "message": "Writing to file /Users/e12345/PSI/.demo/review/data/S00000-00999/S00006/S00006_master.h5 took 0.41 seconds."
+   },
+   {
+    "service": "FileWriterManager",
+    "level": "SUCCESS",
+    "count": 1,
+    "last": "2026-10-08T22:22:36+00:00",
+    "message": "Finished writing file /Users/e12345/PSI/.demo/review/data/S00000-00999/S00006/S00006_master.h5."
+   },
+   {
+    "service": "BECMCPClient",
+    "level": "INFO",
+    "count": 26,
+    "first": "2026-10-08T22:02:34+00:00",
+    "last": "2026-10-08T23:40:25+00:00",
+    "message": "Starting device manager"
+   },
+   {
+    "service": "BECMCPClient",
+    "level": "INFO",
+    "count": 26,
+    "first": "2026-10-08T22:02:34+00:00",
+    "last": "2026-10-08T23:40:25+00:00",
+    "message": "Adding new devices: \u2026 eiger: device, dyn_signals: device, pseudo_signal1: computed_signal, hexapod: device, eyefoc: positioner, eyex: positioner, eyey: positioner, flyer_si\u2026 [cut]"
+   },
+   {
+    "service": "BECMCPClient",
+    "level": "INFO",
+    "count": 26,
+    "first": "2026-10-08T22:02:34+00:00",
+    "last": "2026-10-08T23:40:25+00:00",
+    "message": "Starting alarm listener"
+   },
+   {
+    "service": "BECMCPClient",
+    "level": "INFO",
+    "count": 26,
+    "first": "2026-10-08T22:02:34+00:00",
+    "last": "2026-10-08T23:40:25+00:00",
+    "message": "Starting new client"
+   }
+  ]
+ },
+ "truncated": true
+}

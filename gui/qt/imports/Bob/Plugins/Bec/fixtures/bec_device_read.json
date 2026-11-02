@@ -1,0 +1,60 @@
+{
+ "ok": true,
+ "summary": "samx = 5.005 mm (1.3 h old); limits -50 to 50 mm. Ages count from the last published update.",
+ "findings": [],
+ "data": {
+  "name": "samx",
+  "type": "positioner",
+  "enabled": true,
+  "egu": "mm",
+  "limits": {
+   "low": -50,
+   "high": 50
+  },
+  "readback": {
+   "samx": {
+    "value": 5.005004481443811,
+    "timestamp": "2026-10-08T22:22:35+00:00",
+    "age_s": 4670.4
+   },
+   "samx_motor_is_moving": {
+    "value": 0,
+    "timestamp": "2026-10-08T22:22:34+00:00",
+    "age_s": 4671.4
+   },
+   "samx_setpoint": {
+    "value": 5.0,
+    "timestamp": "2026-10-08T22:22:34+00:00",
+    "age_s": 4671.4
+   }
+  },
+  "configuration": {
+   "samx_acceleration": {
+    "value": 1,
+    "timestamp": "2026-10-07T19:06:16+00:00",
+    "age_s": 102849.2
+   },
+   "samx_settle_time": {
+    "value": 0,
+    "timestamp": "2026-10-07T19:06:16+00:00",
+    "age_s": 102849.2
+   },
+   "samx_timeout": {
+    "value": 0,
+    "timestamp": "2026-10-07T19:06:16+00:00",
+    "age_s": 102849.2
+   },
+   "samx_tolerance": {
+    "value": 0.01,
+    "timestamp": "2026-10-07T19:06:16+00:00",
+    "age_s": 102849.2
+   },
+   "samx_velocity": {
+    "value": 100,
+    "timestamp": "2026-10-07T19:06:16+00:00",
+    "age_s": 102849.2
+   }
+  }
+ },
+ "truncated": false
+}

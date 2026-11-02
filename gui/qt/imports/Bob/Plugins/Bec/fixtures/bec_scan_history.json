@@ -1,0 +1,55 @@
+{
+ "ok": true,
+ "summary": "Last 5 scans (numbers 2 to 6): 5 closed.",
+ "findings": [],
+ "data": {
+  "scans": [
+   {
+    "scan_number": 6,
+    "scan_name": "line_scan",
+    "status": "closed",
+    "start_time": "2026-10-08T22:21:32+00:00",
+    "duration_s": 62.8,
+    "num_points": 60,
+    "file_path": "/Users/e12345/PSI/.demo/review/data/S00000-00999/S00006/S00006_master.h5"
+   },
+   {
+    "scan_number": 5,
+    "scan_name": "line_scan",
+    "status": "closed",
+    "start_time": "2026-10-08T22:16:00+00:00",
+    "duration_s": 63.0,
+    "num_points": 60,
+    "file_path": "/Users/e12345/PSI/.demo/review/data/S00000-00999/S00005/S00005_master.h5"
+   },
+   {
+    "scan_number": 4,
+    "scan_name": "line_scan",
+    "status": "closed",
+    "start_time": "2026-10-08T22:05:47+00:00",
+    "duration_s": 63.2,
+    "num_points": 60,
+    "file_path": "/Users/e12345/PSI/.demo/review/data/S00000-00999/S00004/S00004_master.h5"
+   },
+   {
+    "scan_number": 3,
+    "scan_name": "line_scan",
+    "status": "closed",
+    "start_time": "2026-10-08T22:04:42+00:00",
+    "duration_s": 64.5,
+    "num_points": 60,
+    "file_path": "/Users/e12345/PSI/.demo/review/data/S00000-00999/S00003/S00003_master.h5"
+   },
+   {
+    "scan_number": 2,
+    "scan_name": "line_scan",
+    "status": "closed",
+    "start_time": "2026-10-07T19:07:31+00:00",
+    "duration_s": 5.2,
+    "num_points": 20,
+    "file_path": "/Users/e12345/PSI/.demo/review/data/S00000-00999/S00002/S00002_master.h5"
+   }
+  ]
+ },
+ "truncated": true
+}
