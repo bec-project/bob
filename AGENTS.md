@@ -86,7 +86,8 @@ Read the affected implementation and its tests. For unfamiliar areas, start here
 - `deploy/` — deployment configuration, including the annotated `bob.example.toml`
 - `build/` — ignored local build output
 - `.github/workflows/` — reusable CI checks and CI-gated release workflows
-- `ci/` — release binary packaging and its Python tests
+- `ci/` — release packaging: bob-manager archives, the Qt app's RPM and DMG, and their Python
+  tests
 
 Treat `launcher/go.mod` as the source of truth for Go dependencies and the minimum Go version.
 Treat `ruff.toml` as the source of truth for Python linting and formatting settings.

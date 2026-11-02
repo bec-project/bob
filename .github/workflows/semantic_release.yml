@@ -45,3 +45,32 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
         run: bash ci/publish_release.sh
+
+  qt-desktop:
+    needs: release
+    if: needs.release.outputs.release_available == 'true'
+    uses: ./.github/workflows/qt_desktop.yml
+    with:
+      ref: ${{ github.sha }}
+      version: ${{ needs.release.outputs.version }}
+
+  qt-desktop-publish:
+    needs: [release, qt-desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: qt-desktop-*
+          merge-multiple: true
+          path: dist
+      - name: Deliver the Qt desktop app to Gitea (generic and RPM registry) and the GitHub release
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_REGISTRY_TOKEN: ${{ secrets.GITEA_REGISTRY_TOKEN }}
+        run: bash ci/publish_qt_desktop.sh "$VERSION" dist
