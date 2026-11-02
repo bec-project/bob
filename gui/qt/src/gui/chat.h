@@ -72,6 +72,8 @@ class Chat : public QObject
     Q_PROPERTY(QVariantMap notice READ notice NOTIFY noticeChanged)
     // Why the broker ended the lease on the bob this window uses; empty while it holds
     Q_PROPERTY(QString lostReason READ lostReason NOTIFY lostChanged)
+    // Set when the app joined a bob that runs with another bob.toml than the one it asked for
+    Q_PROPERTY(bool restartOffer READ restartOffer NOTIFY restartOfferChanged)
 
 public:
     Chat(Bob *bob, Prefs *prefs, QObject *parent = nullptr);
@@ -110,6 +112,7 @@ public:
     int changedFiles() const;
     QVariantMap notice() const { return m_notice; }
     QString lostReason() const;
+    bool restartOffer() const { return m_restartOffer; }
     const SessionData &data() const { return m_client->data(); }
 
     // Connects to the OpenCode server of this connection (url, password, ...).
@@ -118,6 +121,10 @@ public:
     Q_INVOKABLE void joinBob();
     // Ends the app's lease on bob, if it holds one, and goes back to the connect screen.
     Q_INVOKABLE void leaveBob();
+    // Stops the user's bob, for every app that holds it, and starts it with this app's bob.toml.
+    Q_INVOKABLE void restartBob();
+    // Keeps using the bob that runs with the other bob.toml.
+    Q_INVOKABLE void dismissRestart();
     Q_INVOKABLE void disconnect();
     // Opens a chat; an empty id starts a new one.
     Q_INVOKABLE void selectSession(const QString &id);
@@ -168,6 +175,7 @@ signals:
     void changesChanged();
     void noticeChanged();
     void lostChanged();
+    void restartOfferChanged();
     // Put text into the composer: replace it, or add it to what is there.
     void composerRequest(const QString &text, bool replace);
     // A reply to the permission request `id` did not reach OpenCode; the request is still open.
@@ -209,8 +217,9 @@ private:
     QString m_phase = QStringLiteral("setup");
     QString m_connectError;
     bool m_awaitingJoin = false;
-    // Said once connected: bob already ran with another bob.toml
-    QString m_joinNotice;
+    // Offered once connected: bob already ran with another bob.toml
+    bool m_offerRestart = false;
+    bool m_restartOffer = false;
 
     QString m_currentId;
     QVariantMap m_notice;

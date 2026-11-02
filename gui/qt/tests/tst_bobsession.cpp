@@ -12,13 +12,17 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <functional>
+#include <memory>
+
 namespace {
 
 const QByteArray up =
     R"({"connection":{"url":"http://127.0.0.1:1","password":"p","name":"fake-1"},"config":"CONFIG","consumers":1})";
 
 // A broker that answers every client with `reply` (CONFIG replaced by `config`), or never answers
-// when `reply` is empty, and records the hellos and ended leases it saw.
+// when `reply` is empty, and records the hellos and ended leases it saw. A stop request makes it
+// tell every lease why, close them and go away, as the real one does.
 class FakeBroker : public QObject
 {
 public:
@@ -32,7 +36,22 @@ public:
                 m_clients << client;
                 connect(client, &QLocalSocket::readyRead, this, [this, client] {
                     while (client->canReadLine()) {
-                        hellos << client->readLine();
+                        const QByteArray line = client->readLine();
+                        const QJsonObject hello = QJsonDocument::fromJson(line).object();
+                        if (hello.value("stop").toBool()) {
+                            if (ignoreStop)
+                                continue;
+                            const QString reason = hello.value("reason").toString();
+                            stops << reason;
+                            m_clients.removeAll(client);
+                            client->write(QJsonDocument(QJsonObject{{"stopped", reason}}).toJson(QJsonDocument::Compact) + '\n');
+                            closeAll(reason);
+                            m_server.close();
+                            if (afterStop)
+                                afterStop();
+                            return;
+                        }
+                        hellos << line;
                         if (!m_reply.isEmpty())
                             client->write(m_reply + '\n');
                     }
@@ -42,15 +61,22 @@ public:
         });
     }
 
-    // Closes every lease, as a broker does when bob stops.
-    void closeAll()
+    // Closes every lease, as a broker does when bob stops, telling each why first when there is
+    // a reason.
+    void closeAll(const QString &reason = {})
     {
-        for (QLocalSocket *client : std::as_const(m_clients))
+        for (QLocalSocket *client : std::as_const(m_clients)) {
+            if (!reason.isEmpty())
+                client->write(QJsonDocument(QJsonObject{{"stopped", reason}}).toJson(QJsonDocument::Compact) + '\n');
             client->disconnectFromServer();
+        }
     }
 
     QList<QByteArray> hellos;
+    QStringList stops;
     int ended = 0;
+    bool ignoreStop = false;
+    std::function<void()> afterStop;
 
 private:
     QLocalServer m_server;
@@ -266,6 +292,79 @@ private slots:
         QTRY_COMPARE(broker.ended, 1);
     }
 
+    void reportsWhyTheBrokerEndedTheLease()
+    {
+        const QString socket = m_dir.filePath(QStringLiteral("reason.sock"));
+        FakeBroker broker(socket, up, m_config);
+        BobSession session;
+        session.join(printingSocket(socket), m_config);
+        QTRY_COMPARE(session.status().state, BobStatus::Joined);
+        QCOMPARE(session.status().consumers, 1);
+        broker.closeAll(QStringLiteral("bob stopped: its sandbox exited"));
+        QTRY_COMPARE(session.status().state, BobStatus::Lost);
+        QCOMPARE(session.status().reason, QStringLiteral("bob stopped: its sandbox exited"));
+    }
+
+    void joiningAgainWithAnotherConfigShowsTheMismatch()
+    {
+        const QString socket = m_dir.filePath(QStringLiteral("mismatch.sock"));
+        const QString other = m_dir.filePath(QStringLiteral("other.toml"));
+        QVERIFY(QFile(other).open(QIODevice::WriteOnly));
+        FakeBroker broker(socket, up, m_config);
+        BobSession session;
+        const QString binary = printingSocket(socket);
+        session.join(binary, m_config);
+        QTRY_COMPARE(session.status().state, BobStatus::Joined);
+        QSignalSpy changes(&session, &BobSession::statusChanged);
+        session.join(binary, other);
+        // the window hears about it, and the lease stays the one
+        QCOMPARE(changes.size(), 1);
+        QCOMPARE(session.status().config, other);
+        QCOMPARE(session.status().runningConfig, m_config);
+        QTest::qWait(200);
+        QCOMPARE(broker.hellos.size(), 1);
+        session.leave();
+    }
+
+    void restartingStopsTheBrokerAndJoinsANewBob()
+    {
+        const QString socket = m_dir.filePath(QStringLiteral("restart.sock"));
+        const QString other = m_dir.filePath(QStringLiteral("other.toml"));
+        QVERIFY(QFile(other).open(QIODevice::WriteOnly));
+        const QString binary = printingSocket(socket);
+        // the first broker runs bob with bob.toml; once it has gone, a second one runs other.toml
+        FakeBroker first(socket, up, m_config);
+        std::unique_ptr<FakeBroker> second;
+        first.afterStop = [&] { second = std::make_unique<FakeBroker>(socket, up, other); };
+        BobSession session;
+        session.join(binary, m_config);
+        QTRY_COMPARE(session.status().state, BobStatus::Joined);
+
+        session.restart(binary, other, QStringLiteral("another app restarted bob with other.toml"));
+        QCOMPARE(session.status().state, BobStatus::Joining);
+        QTRY_COMPARE(session.status().state, BobStatus::Joined);
+        QCOMPARE(first.stops, QStringList{"another app restarted bob with other.toml"});
+        QVERIFY(second);
+        QCOMPARE(second->hellos.size(), 1);
+        QVERIFY(second->hellos.first().contains("other.toml"));
+        QCOMPARE(session.status().config, other);
+        QCOMPARE(session.status().runningConfig, other);
+        session.leave();
+    }
+
+
+    void givesUpOnABrokerThatDoesNotStop()
+    {
+        const QString socket = m_dir.filePath(QStringLiteral("stubborn.sock"));
+        FakeBroker broker(socket, up, m_config);
+        broker.ignoreStop = true;
+        BobSession session;
+        session.setStopTimeout(300);
+        session.restart(printingSocket(socket), m_config, QStringLiteral("why"));
+        QTRY_COMPARE(session.status().state, BobStatus::Idle);
+        QCOMPARE(session.status().error, QStringLiteral("bob's broker did not stop"));
+    }
+
     void describesTheStatusLikeTheTauriApp()
     {
         BobStatus joined;
@@ -274,8 +373,9 @@ private slots:
         joined.name = QStringLiteral("c");
         joined.config = QStringLiteral("a");
         joined.runningConfig = QStringLiteral("b");
-        const QVariantMap expected{{"state", "joined"}, {"connection", QVariantMap{{"url", "u"}}},
-                                   {"name", "c"}, {"config", "a"}, {"runningConfig", "b"}};
+        joined.consumers = 2;
+        const QVariantMap expected{{"state", "joined"}, {"connection", QVariantMap{{"url", "u"}}}, {"name", "c"},
+                                   {"config", "a"}, {"runningConfig", "b"}, {"consumers", 2}};
         QCOMPARE(joined.toVariant(), expected);
         const QVariantMap idle = BobStatus::idle().toVariant();
         QCOMPARE(idle.value("state").toString(), QStringLiteral("idle"));
