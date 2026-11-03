@@ -1,8 +1,8 @@
 # Sandbox manager
 
-bob-manager runs OpenCode on the host under Anthropic's
-[sandbox-runtime](https://github.com/anthropic-experimental/sandbox-runtime), prints its
-authenticated connection, and stops the sandbox on shutdown. OpenCode's home
+bob-manager's per-user broker runs OpenCode under Anthropic's
+[sandbox-runtime](https://github.com/anthropic-experimental/sandbox-runtime), returns its
+authenticated connection to clients, and stops the sandbox on shutdown. OpenCode's home
 folder, with its sessions, persists.
 
 For Go callers, import `bob/sandbox`, start with
@@ -78,6 +78,45 @@ bob-manager rejects any setting it does not know and names it.
 Each user has one bob, started by their first GUI and shared by every client of that user: the
 desktop app (one or more windows of it), later BEC widgets. bob has no headless mode; a sandbox
 runs only while a client holds it, and for the linger time after the last one leaves.
+
+### Component responsibilities
+
+The same `bob-manager` executable acts as the locator, the detached broker, and the helper
+inside the sandbox. The sandbox package runs in the host broker process; srt creates the
+isolated environment in which the helper and OpenCode run.
+
+| Component | Responsibility |
+| --- | --- |
+| [`main.go`](../cmd/bob-manager/main.go) | Load configuration, parse arguments, handle signals, and dispatch to the locator, `--broker`, or `--sandbox-helper` mode. |
+| [`broker.go`](../cmd/bob-manager/broker.go) | Hold the per-user lock, serve `broker.sock`, track client leases, and decide when to start or stop the shared backend. |
+| [`sandbox.Manager`](manager.go) | Own backend resources: validate and prepare policy, start host MCP servers and srt, check readiness and policy, and clean up processes and tunnels. Its `Start`, `Check`, and `Stop` calls are serialized by the broker. |
+| [`RunSandboxHelper`](tunnel.go) | Run inside the sandbox, accept the inherited Unix listener, forward connections to sandbox-local OpenCode, and launch and wait for OpenCode. |
+
+Startup and shutdown follow this sequence:
+
+1. The client runs the locator, which finds or starts a detached broker and returns its socket
+   path. This probe does not acquire a lease or start OpenCode.
+2. The client connects to `broker.sock` and sends a lease request. The first request starts
+   `Manager.Start`; other clients wait for the same result.
+3. The manager starts configured host MCP processes, prepares the policy and incoming tunnel,
+   and launches srt. The sandbox helper launches OpenCode. The manager waits for authenticated
+   readiness and verifies OpenCode's effective configuration and permissions.
+4. The broker replies with connection details. The client keeps the broker connection open as
+   its lease and sends OpenCode requests through the returned HTTP endpoint.
+5. After the last lease ends and the linger period expires, the broker closes its listener,
+   cancels and waits for any startup and health check, then calls `Manager.Stop`. An explicit
+   stop request, broker interruption, or detected backend failure also initiates shutdown.
+6. The manager closes the incoming TCP listener, terminates and waits for the sandbox, removes
+   the temporary run directory, and stops its managed host MCP processes. Persistent sessions
+   remain. Unresolved host MCP processes remain recorded for a cleanup retry.
+
+The incoming API path is client HTTP → host TCP listener → `server.sock` → sandbox helper →
+OpenCode at sandbox-local `127.0.0.1:4096`. The manager creates `server.sock` and passes its
+listening descriptor into the sandbox as stdin. The broker connection carries lifecycle JSON;
+it does not carry OpenCode API traffic. Outgoing provider and MCP traffic uses srt's proxies
+(see [Network policy](#network-policy)).
+
+### Client protocol and broker lifetime
 
 A per-user broker owns the sandbox. A client finds it with
 

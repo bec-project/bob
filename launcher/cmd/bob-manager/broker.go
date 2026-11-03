@@ -43,7 +43,7 @@ const (
 	defaultLinger = 90 * time.Second
 	// clientDeadline covers a broker that is still stopping the previous bob.
 	clientDeadline = 3 * time.Minute
-	helloTimeout   = 10 * time.Second
+	requestTimeout = 10 * time.Second
 )
 
 // firstClientWait bounds a broker whose starting client never connected; tests shorten it.
@@ -67,7 +67,12 @@ type lifecycle interface {
 	Stop(ctx context.Context) error
 }
 
-type hello struct {
+// brokerRequest is the first JSON line a client sends over broker.sock, decoded by
+// broker.handle. It either acquires a lease, keeping bob alive while the connection
+// stays open, or requests that bob and its broker stop for every client. This is
+// the lifecycle control connection; OpenCode traffic uses the separate HTTP endpoint
+// returned in brokerReply.Connection.
+type brokerRequest struct {
 	Consumer string `json:"consumer"`
 	PID      int    `json:"pid"`
 	Config   string `json:"config"`
@@ -76,6 +81,11 @@ type hello struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// brokerReply is a JSON line the broker sends to a client over broker.sock from
+// broker.handle or during shutdown in broker.serve. It provides the OpenCode HTTP
+// connection details after startup, reports a failed request, or tells clients why
+// bob is stopping before closing their leases. The reply carries lifecycle status;
+// clients exchange OpenCode data through Connection's separate HTTP endpoint.
 type brokerReply struct {
 	Connection *sandbox.Connection `json:"connection,omitempty"`
 	Config     string              `json:"config,omitempty"`
@@ -292,20 +302,20 @@ func (b *broker) serve(ctx context.Context, listener net.Listener) error {
 
 func (b *broker) handle(conn net.Conn) {
 	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(helloTimeout))
+	_ = conn.SetReadDeadline(time.Now().Add(requestTimeout))
 	reader := bufio.NewReader(conn)
 	line, err := reader.ReadBytes('\n')
-	var greeting hello
-	if err != nil || json.Unmarshal(line, &greeting) != nil {
+	var request brokerRequest
+	if err != nil || json.Unmarshal(line, &request) != nil {
 		return // `bob-manager` checking that the broker answers, or not a client
 	}
 	_ = conn.SetReadDeadline(time.Time{})
-	if greeting.Stop {
-		reason := greeting.Reason
+	if request.Stop {
+		reason := request.Reason
 		if reason == "" {
-			reason = fmt.Sprintf("bob was stopped by %s", greeting.Consumer)
+			reason = fmt.Sprintf("bob was stopped by %s", request.Consumer)
 		}
-		b.logf("client %q (pid %d) stops bob: %s", greeting.Consumer, greeting.PID, reason)
+		b.logf("client %q (pid %d) stops bob: %s", request.Consumer, request.PID, reason)
 		b.requestStop(reason)
 		_ = json.NewEncoder(conn).Encode(brokerReply{Stopped: reason})
 		return
@@ -328,7 +338,7 @@ func (b *broker) handle(conn net.Conn) {
 	}
 	count := b.consumers
 	b.mu.Unlock()
-	b.logf("client %q (pid %d) joined; %d holding bob", greeting.Consumer, greeting.PID, count)
+	b.logf("client %q (pid %d) joined; %d holding bob", request.Consumer, request.PID, count)
 
 	defer func() {
 		b.mu.Lock()
@@ -339,7 +349,7 @@ func (b *broker) handle(conn net.Conn) {
 			b.idle.Reset(b.linger)
 		}
 		b.mu.Unlock()
-		b.logf("client %q (pid %d) left; %d holding bob", greeting.Consumer, greeting.PID, left)
+		b.logf("client %q (pid %d) left; %d holding bob", request.Consumer, request.PID, left)
 	}()
 
 	select {
@@ -428,7 +438,7 @@ func ensureBroker(ctx context.Context, directory, config string, linger time.Dur
 	for {
 		conn, err := net.DialTimeout("unix", socket, 2*time.Second)
 		if err == nil {
-			_ = conn.Close() // no hello: the broker counts no lease for this check
+			_ = conn.Close() // no request: the broker counts no lease for this check
 			return socket, nil
 		}
 		// A broker that is still stopping the previous bob holds the lock, so a new one exits

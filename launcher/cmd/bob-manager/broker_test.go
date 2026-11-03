@@ -125,10 +125,10 @@ func startBroker(t *testing.T, manager lifecycle, linger time.Duration) brokerRu
 	return run
 }
 
-// lease is a client's side of the protocol, as the GUIs implement it: send hello, read the reply.
+// lease is a client's side of the protocol, as the GUIs implement it: send a request, read the reply.
 func lease(ctx context.Context, conn net.Conn, consumer, config string) (brokerReply, *bufio.Reader, error) {
-	greeting := hello{Consumer: consumer, PID: os.Getpid(), Config: config}
-	if err := json.NewEncoder(conn).Encode(greeting); err != nil {
+	request := brokerRequest{Consumer: consumer, PID: os.Getpid(), Config: config}
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
 		return brokerReply{}, nil, err
 	}
 	reader := bufio.NewReader(conn)
@@ -327,7 +327,7 @@ func TestClientStopsBobForEveryone(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	request := hello{Consumer: "bob-gui", PID: os.Getpid(), Stop: true, Reason: "restarted with /etc/other.toml"}
+	request := brokerRequest{Consumer: "bob-gui", PID: os.Getpid(), Stop: true, Reason: "restarted with /etc/other.toml"}
 	if err := json.NewEncoder(conn).Encode(request); err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestStopWithoutBobJustEndsTheBroker(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if err := json.NewEncoder(conn).Encode(hello{Consumer: "bob-gui", Stop: true}); err != nil {
+	if err := json.NewEncoder(conn).Encode(brokerRequest{Consumer: "bob-gui", Stop: true}); err != nil {
 		t.Fatal(err)
 	}
 	if reason := stoppedThenClosed(t, conn); reason != "bob was stopped by bob-gui" {
@@ -451,7 +451,7 @@ func TestInterruptCancelsStartupBeforeStopping(t *testing.T) {
 		t.Fatal("cleanup did not run after the cancelled startup")
 	}
 	// the waiting consumer learns that bob is gone: its connection closes, it is told why bob
-	// stopped, or, when the broker read its hello only after stopping began, it gets an error reply
+	// stopped, or, when the broker read its request only after stopping began, it gets an error reply
 	line, err := bufio.NewReader(conn).ReadBytes('\n')
 	if err == nil && !strings.Contains(string(line), `"error"`) && !strings.Contains(string(line), `"stopped"`) {
 		t.Fatalf("consumer got a connection from a stopping broker: %s", line)
