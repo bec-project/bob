@@ -86,8 +86,11 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	if err := validateHostMCPStorage(options); err != nil {
 		return connection, err
 	}
-	// srt makes its proxy's Unix sockets in its temporary folder. Node.js cuts a path too long for
-	// a socket short without an error, and srt then fails with an unrelated "address in use".
+
+	// srt creates its proxy Unix sockets in its temporary directory. Node.js silently truncates
+	// socket paths that exceed the platform limit, causing srt to report a misleading
+	// "address in use" error. We therefore have to reject paths that would exceed the limit
+	// before starting srt.
 	temporary := filepath.Join(options.Home, ".cache", "tmp")
 	if longest := filepath.Join(temporary, srtLongestSocket); len(longest) > maxSocketPath {
 		return connection, fmt.Errorf("sandbox.home is too long for sandbox-runtime's sockets in %s (%d bytes with their names, at most %d); set sandbox.home to a shorter directory",
@@ -164,12 +167,16 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 		return connection, err
 	}
 
-	// The app's way in: a TCP listener on bind_address, forwarded to a Unix socket in the run
-	// directory that the helper in the sandbox accepts on and gets as standard input. Only that
-	// Unix socket goes in. A TCP socket made here belongs to the host's network: code in the
-	// sandbox that got hold of it could disconnect it and connect it anywhere the host reaches,
-	// past srt's proxy. A listening Unix socket cannot be connected anywhere, and srt's filter
-	// refuses new ones.
+	// Clients reach OpenCode through a host TCP listener on bind_address. We forward each
+	// connection to a Unix socket in the run directory and pass that socket's listening file
+	// descriptor to the sandbox helper as stdin. The helper accepts connections and forwards
+	// them to OpenCode on the sandbox's loopback interface.
+	//
+	// We must pass only the Unix listener into the sandbox. A TCP socket created on the host
+	// retains access to the host's network, even inside the sandbox: sandboxed code could
+	// reconnect it to another host-reachable address, bypassing srt's proxy restrictions.
+	// The Unix listener cannot be repurposed to make outgoing connections, and srt's filter
+	// blocks the creation of new Unix sockets.
 	wayInPath := filepath.Join(runDir, sandboxServerSocket)
 	if len(wayInPath) > maxSocketPath {
 		return connection, fmt.Errorf("%s is too long for a Unix socket (%d bytes, at most %d); set XDG_RUNTIME_DIR to a shorter directory",

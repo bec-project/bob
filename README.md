@@ -37,6 +37,8 @@ Remote access requires an explicit bind address and protected TLS ingress.
 ## Documentation
 
 - [Configuration example](deploy/bob.example.toml) — settings and defaults
+- [How bob runs](launcher/sandbox/README.md#how-bob-runs) — component responsibilities, startup,
+  shutdown, and the client protocol
 - [Sandbox manager](launcher/sandbox/README.md) — configuration, network policy, isolation limits, and testing
 
 The sandbox reaches only the configured endpoints, filtered by host and port, not URL path, and

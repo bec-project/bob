@@ -1,4 +1,3 @@
-// bob-manager runs the per-user broker that keeps one bob for every GUI a user opens.
 package main
 
 import (

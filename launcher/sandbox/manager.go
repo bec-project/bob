@@ -1,5 +1,3 @@
-// Package sandbox runs bob's OpenCode backend in a bubblewrap sandbox, without a UI
-// dependency.
 package sandbox
 
 import (

@@ -66,6 +66,11 @@ func hostMCPURL(server MCPServer) string {
 	return endpoint.String()
 }
 
+// startHostMCPs starts each configured host_command in its own process group and
+// waits for its TCP endpoint to accept connections. Servers without a host_command
+// are externally managed and skipped; an already occupied endpoint is rejected.
+// Processes are recorded on the Manager as they start so startup failure or
+// cancellation leaves them available for cleanup through Stop.
 func (m *Manager) startHostMCPs(ctx context.Context, servers map[string]MCPServer) error {
 	for _, name := range mcpServerNames(servers) {
 		server := servers[name]
