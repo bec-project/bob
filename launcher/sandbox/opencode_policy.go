@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -24,6 +25,17 @@ type openCodePolicy struct {
 	directory string
 	home      string
 	config    string
+}
+
+// workingDirectory keeps OpenCode's deferred location loader inside generated policy.
+// On macOS, opening its global config directory skips ancestor discovery entirely.
+// Otherwise, discovering a blocked ancestor .opencode directory aborts prompts with
+// EPERM, which Seatbelt returns where Linux's hidden paths would appear absent.
+func (p openCodePolicy) workingDirectory() string {
+	if runtime.GOOS == "darwin" {
+		return filepath.Dir(p.config)
+	}
+	return p.home
 }
 
 func prepareOpenCodePolicy(persistentHome string) (openCodePolicy, error) {

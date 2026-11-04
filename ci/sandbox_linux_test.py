@@ -108,6 +108,8 @@ class SyntheticHandler(BaseHTTPRequestHandler):
 
 def process_tree(pid):
     """Remember owned descendants and their start times, avoiding PID reuse during cleanup."""
+    if sys.platform == "darwin":
+        return macos_process_tree(pid)
     found = {}
     pending = [pid]
     while pending:
@@ -122,6 +124,55 @@ def process_tree(pid):
         except OSError:
             pass
     return found
+
+
+def macos_process_tree(pid):
+    """Snapshot a macOS process tree, including children in separate process groups."""
+    result = subprocess.run(
+        ["/bin/ps", "-axo", "pid=,ppid=,lstart="],
+        env={"LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=True,
+    )
+    processes = {}
+    for line in result.stdout.splitlines():
+        current, parent, started = line.split(maxsplit=2)
+        processes[int(current)] = (int(parent), started)
+    found = {}
+    pending = [pid]
+    while pending:
+        current = pending.pop()
+        if current in found or current not in processes:
+            continue
+        found[current] = processes[current][1]
+        pending.extend(child for child, (parent, _) in processes.items() if parent == current)
+    return found
+
+
+def stop_process(process, timeout=45):
+    """Stop a test-owned parent and any descendants whose recorded identity still matches."""
+    if process.returncode is not None:
+        return  # Already reaped: this PID could now belong to an unrelated process.
+    try:
+        owned = process_tree(process.pid)
+    finally:
+        # Inspection can fail, but the unreaped Popen still owns its parent PID.
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+    for pid, started in reversed(list(owned.items())):
+        if process_tree(pid).get(pid) == started:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    process.wait(timeout=5)
 
 
 @unittest.skipUnless(
@@ -167,20 +218,7 @@ class LinuxSandboxTests(unittest.TestCase):
             self.lease.close()
             self.lease = None
         if self.process is not None:
-            owned = process_tree(self.process.pid)
-            if self.process.poll() is None:
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=45)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-            for pid, started in reversed(list(owned.items())):
-                if process_tree(pid).get(pid) == started:
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-            self.process.wait(timeout=5)
+            stop_process(self.process)
             self.process = None
         if self.log is not None:
             self.log.close()
