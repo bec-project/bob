@@ -1,0 +1,8 @@
+{
+  "name": "bob-sandbox-runtime",
+  "private": true,
+  "description": "The sandbox-runtime bob-manager runs OpenCode under, installed with the RPM",
+  "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.81"
+  }
+}
