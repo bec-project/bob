@@ -9,6 +9,27 @@ import (
 	"testing"
 )
 
+func TestSandboxCommandProxiesUseLoopbackWithoutDNS(t *testing.T) {
+	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "FTP_PROXY", "http_proxy", "https_proxy", "all_proxy", "ftp_proxy"} {
+		t.Run(name, func(t *testing.T) {
+			original := []string{
+				name + "=http://user:synthetic-secret@localhost:12345",
+				"NO_PROXY=localhost,127.0.0.1,::1,10.0.0.0/8",
+				"no_proxy=localhost,127.0.0.1,::1,10.0.0.0/8",
+				"LLM_BASE_URL=https://provider.example/api/",
+			}
+			want := append([]string(nil), original...)
+			want[0] = name + "=http://user:synthetic-secret@127.0.0.1:12345"
+			if got := sandboxCommandEnvironment(original); !reflect.DeepEqual(got, want) {
+				t.Fatal("proxy normalization changed its credentials, port or unrelated environment")
+			}
+			if original[0] != name+"=http://user:synthetic-secret@localhost:12345" {
+				t.Fatal("proxy normalization mutated the helper's environment")
+			}
+		})
+	}
+}
+
 func TestSRTEndpointsReachThisMachineOnLoopback(t *testing.T) {
 	allowed, inside, err := getSRTEndpoints([]string{
 		"https://ai.example/api",

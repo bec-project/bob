@@ -121,6 +121,7 @@ func RunSandboxHelper(command []string) error {
 	}
 
 	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Env = sandboxCommandEnvironment(os.Environ())
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, os.Stdout, os.Stderr
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start OpenCode: %w", err)

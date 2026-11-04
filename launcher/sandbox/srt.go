@@ -192,7 +192,7 @@ func (m *Manager) startSandbox(parent context.Context, options resolvedOptions) 
 	sandbox.listeners = append(sandbox.listeners, listener)
 	sandbox.cmd = exec.Command(tools.node, tools.srt, "--settings", settingsPath, "--",
 		helper, "--sandbox-helper", openCode, "serve", "--hostname", "127.0.0.1", "--port", port)
-	sandbox.cmd.Dir = policy.home
+	sandbox.cmd.Dir = policy.workingDirectory()
 	sandbox.cmd.Env = env
 	if stdin != nil {
 		sandbox.cmd.Stdin = stdin

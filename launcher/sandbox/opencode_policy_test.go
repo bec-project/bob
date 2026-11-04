@@ -342,7 +342,12 @@ func TestOpenCodePolicyWithPinnedExecutable(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(version)) != "1.18.35" {
 		t.Fatalf("configuration regression needs OpenCode 1.18.35, got %q: %v", version, err)
 	}
-	root := t.TempDir()
+	// Match prepareSandboxData's canonical paths. On macOS, getcwd resolves /var
+	// to /private/var; the location loader compares it with XDG_CONFIG_HOME's path.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	home, workspace := filepath.Join(root, "persistent-home"), filepath.Join(root, "workspace")
 	marker := filepath.Join(root, "untrusted-code-executed")
 	var remoteRequests atomic.Int32
@@ -439,9 +444,9 @@ func TestOpenCodePolicyWithPinnedExecutable(t *testing.T) {
 	defer cancel()
 	output := &tailWriter{}
 	cmd := exec.CommandContext(ctx, executable, "serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port))
-	// The MCP-only runtime starts in its immutable home. The v2 loader in this pinned release
-	// ignores DISABLE_PROJECT_CONFIG and rescans the process's working directory on a prompt.
-	cmd.Dir = policy.home
+	// Use the runtime's immutable working directory. The v2 loader in this pinned release
+	// ignores DISABLE_PROJECT_CONFIG and discovers location configuration on a prompt.
+	cmd.Dir = policy.workingDirectory()
 	cmd.Env = append([]string{"PATH=" + os.Getenv("PATH")}, policy.environment(home)...)
 	cmd.Env = append(cmd.Env, launch...)
 	cmd.Stdout, cmd.Stderr = output, output

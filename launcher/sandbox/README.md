@@ -189,6 +189,9 @@ srt's `dist/cli.js`. macOS is weaker than Linux, so use it for development only:
   srt's proxy.
 - `localhost` and `127.0.0.1` in bob.toml are reached directly on loopback, so a local MCP server
   sees `Host: 127.0.0.1:<port>` and needs no `--allowed-hosts`.
+- The helper changes `localhost` in srt's proxy URLs to `127.0.0.1` before starting OpenCode:
+  hostname lookup can fail inside Seatbelt. The proxy ports, credentials and srt's `NO_PROXY`
+  rules stay the same.
 - Seatbelt shows no status a process could read: before OpenCode starts, the helper checks that a
   connection to another host, a Unix socket connection and a write outside the sandbox's folders
   are refused.
@@ -216,8 +219,11 @@ Only the three data/cache/state directories are writable. The parent `sandbox.ho
 exposed, so legacy `.config` and `.opencode` trees are invisible. Data directories cannot be
 symlinks into unrelated host storage. Before each launch, bob recreates only the generated
 `.opencode-policy` tree, safely replacing poisoned symlinks without following them. Its stable
-read-only `home` is both OpenCode's `HOME` and working directory; its configuration is also
-read-only. The stable path lets new MCP-only conversations resume after restarting bob.
+read-only `home` is OpenCode's `HOME` and, on Linux, its working directory. On macOS the working
+directory is the generated `config/opencode` directory: OpenCode's location loader recognizes
+this as its global configuration directory and skips ancestor discovery, avoiding permission
+errors from Seatbelt on blocked legacy configuration. Both directories remain read-only. The
+stable paths let new MCP-only conversations resume after restarting bob.
 
 XDG data/cache/state keep their previous locations. `TMPDIR` and `CLAUDE_CODE_TMPDIR` point at
 `.cache/tmp` rather than a shared temporary directory. Direct workspace settings are rejected;
@@ -322,11 +328,11 @@ python3 -m unittest discover -s ci -p '*_test.py'
 
 Unit tests need no bubblewrap: they put a stand-in `bwrap` first on the PATH and use synthetic
 endpoints and host MCP servers. They run on Linux and macOS, each with its platform's own
-tests. The opt-in real sandbox tests below exercise the installed runtime on Linux;
+tests. The opt-in real sandbox tests below exercise the installed runtime on Linux and macOS;
 ordinary unit tests use stand-ins. See
 [CI workflows](../../.github/workflows) for checks and release publishing.
 
-## Real Linux validation
+## Real sandbox validation
 
 The policy regression uses the actual pinned OpenCode configuration loader and synthetic local
 HTTP endpoints. On Linux, cross-compiled test binaries can run it too:
@@ -345,6 +351,13 @@ BOB_SANDBOX_TEST_OPENCODE=/path/to/opencode \
 BOB_SANDBOX_TEST_SRT=/path/to/sandbox-runtime/dist/cli.js \
   python3 ci/sandbox_linux_test.py -v
 ```
+
+On macOS, use the same environment variables with `python3 ci/sandbox_macos_test.py -v`.
+That suite checks real Seatbelt startup, MCP-only chat, restart and session resumption with
+poisoned legacy configuration. It also runs the sandbox helper against a synthetic proxy to
+check that outgoing requests work without resolving `localhost`. Cleanup tracks test-owned
+descendants on macOS, including children in separate process groups. The missing-seccomp-helper
+check is Linux-only and skipped.
 
 These tests use private temporary directories, their own broker and synthetic provider/MCP
 endpoints. They do not contact a beamline, real model or production credentials. Ordinary script

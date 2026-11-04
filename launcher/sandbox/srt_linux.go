@@ -15,6 +15,9 @@ import (
 // maxSocketPath is the longest path Linux takes for a Unix socket.
 const maxSocketPath = 107
 
+// sandboxCommandEnvironment preserves the environment srt generated for Linux.
+func sandboxCommandEnvironment(environment []string) []string { return environment }
+
 // findBwrap finds bubblewrap, which srt builds the sandbox with.
 func findBwrap() (string, error) {
 	bwrap, err := exec.LookPath("bwrap")

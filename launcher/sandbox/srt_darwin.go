@@ -2,8 +2,10 @@ package sandbox
 
 import (
 	"net"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // On macOS, srt confines the sandbox with Seatbelt (sandbox-exec). The sandbox shares the host's
@@ -39,6 +41,30 @@ func applyPlatformSettings(settings *srtSettings, _ sandboxTools) {
 // which allowLocalBinding opens; srt's NO_PROXY keeps such connections away from its proxy.
 func thisMachineEndpoint(string) (string, []string, error) {
 	return "127.0.0.1", nil, nil
+}
+
+// sandboxCommandEnvironment uses numeric loopback for srt's proxies because
+// localhost lookup can fail inside Seatbelt. Preserve srt's ports, credentials
+// and NO_PROXY rules; only the spelling of its loopback address changes.
+func sandboxCommandEnvironment(environment []string) []string {
+	environment = append([]string(nil), environment...)
+	for index, entry := range environment {
+		name, value, _ := strings.Cut(entry, "=")
+		switch strings.ToLower(name) {
+		case "http_proxy", "https_proxy", "all_proxy", "ftp_proxy":
+			endpoint, err := url.Parse(value)
+			if err != nil || endpoint.Hostname() != "localhost" {
+				continue
+			}
+			port := endpoint.Port()
+			endpoint.Host = "127.0.0.1"
+			if port != "" {
+				endpoint.Host = net.JoinHostPort("127.0.0.1", port)
+			}
+			environment[index] = name + "=" + endpoint.String()
+		}
+	}
+	return environment
 }
 
 // openWayIn makes the app's way in: a TCP listener on bind_address, forwarded to the loopback

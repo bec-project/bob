@@ -12,6 +12,8 @@ var errUnsupported = errors.New("bob's sandbox runs on Linux and macOS only")
 
 const maxSocketPath = 0
 
+func sandboxCommandEnvironment(environment []string) []string { return environment }
+
 func findBwrap() (string, error)                       { return "", errUnsupported }
 func findPlatformTools(*sandboxTools) error            { return errUnsupported }
 func platformReadable(sandboxTools) []string           { return nil }
