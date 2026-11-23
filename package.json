@@ -2,7 +2,7 @@
   "name": "bob-release-tools",
   "private": true,
   "devDependencies": {
-    "semantic-release": "^25.0.0",
+    "semantic-release": "^26.0.1",
     "@semantic-release/exec": "^7.0.0",
     "conventional-changelog-conventionalcommits": "^9.0.0"
   }
